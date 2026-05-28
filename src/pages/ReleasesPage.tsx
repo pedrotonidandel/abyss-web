@@ -6,6 +6,33 @@ import type { AppRelease, ReleaseComment, ReleaseReactionGroup } from '../types'
 
 const EMOJI_OPTIONS = ['👍', '❤️', '🔥', '🎉', '😮', '😢']
 
+function UserAvatar({ name, avatarUrl, size = 28 }: { name: string; avatarUrl: string | null; size?: number }) {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name}
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+      />
+    )
+  }
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      background: '#1a1a1a', border: '1px solid #2a2a2a',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.4, fontWeight: 700, color: '#00b4ff',
+    }}>
+      {name.charAt(0).toUpperCase()}
+    </div>
+  )
+}
+
+function openProfile(userId: number) {
+  const w = window as unknown as { openUserProfile?: (id: number) => void }
+  if (w.openUserProfile) w.openUserProfile(userId)
+}
+
 interface ReleaseItemProps {
   release: AppRelease
   currentUserId: number
@@ -91,8 +118,8 @@ function ReleaseItem({ release, currentUserId }: ReleaseItemProps) {
 
       {expanded && (
         <div className="px-4 pb-4 flex flex-col gap-4">
-          {/* Changelog */}
-          <div className="p-3 rounded-xl text-sm whitespace-pre-wrap" style={{ background: '#0f0f0f', color: '#ccc', maxHeight: 220, overflowY: 'auto' }}>
+          {/* Changelog — tamanho estático, sem scroll */}
+          <div className="p-3 rounded-xl text-sm whitespace-pre-wrap" style={{ background: '#0f0f0f', color: '#ccc' }}>
             {release.changelog}
           </div>
 
@@ -129,27 +156,38 @@ function ReleaseItem({ release, currentUserId }: ReleaseItemProps) {
 
             {loadingComments && <p className="text-xs" style={{ color: '#555' }}>Carregando…</p>}
 
+            {/* Lista com scroll */}
             <div className="flex flex-col gap-2" style={{ maxHeight: 260, overflowY: 'auto' }}>
-              {comments.map((c) => (
-                <div key={c.id} className="flex items-start gap-2">
-                  <div className="flex-1 p-2.5 rounded-xl" style={{ background: '#0f0f0f' }}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-semibold" style={{ color: '#00b4ff' }}>
-                        {c.displayName ?? c.username}
-                      </span>
-                      <span className="text-[10px]" style={{ color: '#444' }}>
-                        {formatDate(c.createdAt)}
-                      </span>
-                    </div>
-                    <p className="text-xs" style={{ color: '#ccc' }}>{c.content}</p>
-                  </div>
-                  {c.userId === currentUserId && (
-                    <button className="mt-1" style={{ color: '#444' }} onClick={() => handleDeleteComment(c.id)}>
-                      ×
+              {comments.map((c) => {
+                const name = c.displayName ?? c.username
+                return (
+                  <div key={c.id} className="flex items-start gap-2">
+                    <button onClick={() => openProfile(c.userId)} className="shrink-0 mt-0.5">
+                      <UserAvatar name={name} avatarUrl={c.avatarUrl} size={26} />
                     </button>
-                  )}
-                </div>
-              ))}
+                    <div className="flex-1 p-2.5 rounded-xl" style={{ background: '#0f0f0f' }}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <button
+                          className="text-xs font-semibold hover:underline"
+                          style={{ color: '#00b4ff' }}
+                          onClick={() => openProfile(c.userId)}
+                        >
+                          {name}
+                        </button>
+                        <span className="text-[10px]" style={{ color: '#444' }}>
+                          {formatDate(c.createdAt)}
+                        </span>
+                      </div>
+                      <p className="text-xs" style={{ color: '#ccc' }}>{c.content}</p>
+                    </div>
+                    {c.userId === currentUserId && (
+                      <button className="mt-1 text-xs" style={{ color: '#444' }} onClick={() => handleDeleteComment(c.id)}>
+                        ×
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
 
             <form onSubmit={handleComment} className="flex gap-2">

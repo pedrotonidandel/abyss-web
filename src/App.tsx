@@ -110,7 +110,15 @@ export default function App() {
             {page === 'browse'   && <BrowsePage onOpenDetail={openDetail} />}
             {page === 'library'  && <LibraryPage onOpenDetail={openDetail} />}
             {page === 'releases' && <ReleasesPage />}
-            {page === 'profile'  && <ProfilePage onLogout={handleLogout} viewedUserId={viewedUserId} onNavigate={(p) => { setPage(p as Page); setViewedUserId(null) }} />}
+            {page === 'profile'  && <ProfilePage onLogout={handleLogout} viewedUserId={viewedUserId} onNavigate={(p) => {
+              if (p.startsWith('profile:')) {
+                setViewedUserId(parseInt(p.slice(8)))
+                setPage('profile')
+              } else {
+                setPage(p as Page)
+                setViewedUserId(null)
+              }
+            }} />}
           </>
         )}
       </main>

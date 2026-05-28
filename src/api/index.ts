@@ -13,6 +13,7 @@ import type {
   PublicUserProfile, FriendUser, FriendRequest, AppNotification,
   AppRelease, AdminUserSummary, BugReport,
   ReleaseComment, ReleaseReactionGroup,
+  Suggestion, SuggestionComment, SuggestionReactionGroup,
 } from '../types'
 
 // ─── Auth ──────────────────────────────────────────────────────────────────
@@ -353,6 +354,42 @@ const admin = {
   },
 }
 
+// ─── Suggestions ───────────────────────────────────────────────────────────
+
+const suggestions = {
+  list(): Promise<Suggestion[]> {
+    return client.request<Suggestion[]>('GET', '/api/v1/suggestions')
+  },
+
+  create(data: { title: string; description: string }): Promise<Suggestion> {
+    return client.request<Suggestion>('POST', '/api/v1/suggestions', data)
+  },
+
+  async remove(id: number): Promise<void> {
+    await client.request<{ ok: true }>('DELETE', `/api/v1/suggestions/${id}`)
+  },
+
+  listComments(suggestionId: number): Promise<SuggestionComment[]> {
+    return client.request<SuggestionComment[]>('GET', `/api/v1/suggestions/${suggestionId}/comments`)
+  },
+
+  addComment(suggestionId: number, content: string): Promise<SuggestionComment> {
+    return client.request<SuggestionComment>('POST', `/api/v1/suggestions/${suggestionId}/comments`, { content })
+  },
+
+  async deleteComment(suggestionId: number, commentId: number): Promise<void> {
+    await client.request<{ ok: true }>('DELETE', `/api/v1/suggestions/${suggestionId}/comments/${commentId}`)
+  },
+
+  listReactions(suggestionId: number): Promise<SuggestionReactionGroup[]> {
+    return client.request<SuggestionReactionGroup[]>('GET', `/api/v1/suggestions/${suggestionId}/reactions`)
+  },
+
+  async toggleReaction(suggestionId: number, emoji: string): Promise<void> {
+    await client.request<{ ok: true }>('POST', `/api/v1/suggestions/${suggestionId}/reactions`, { emoji })
+  },
+}
+
 // ─── Health ────────────────────────────────────────────────────────────────
 
 const health = {
@@ -366,7 +403,7 @@ const health = {
 
 export const api = {
   auth, sources, library, comments, friends, users,
-  notifications, releases, bugs, admin, health,
+  notifications, releases, bugs, suggestions, admin, health,
 } as const
 
 export type Api = typeof api

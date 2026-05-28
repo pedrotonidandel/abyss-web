@@ -186,6 +186,7 @@ export interface ReleaseComment {
   userId: number
   username: string
   displayName: string | null
+  avatarUrl: string | null
   content: string
   createdAt: string
 }
@@ -217,4 +218,33 @@ export interface BugReport {
   createdAt: string
   username: string
   displayName: string
+}
+
+export interface Suggestion {
+  id: number
+  title: string
+  description: string
+  userId: number
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+  commentCount: number
+  createdAt: string
+}
+
+export interface SuggestionComment {
+  id: number
+  suggestionId: number
+  userId: number
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+  content: string
+  createdAt: string
+}
+
+export interface SuggestionReactionGroup {
+  emoji: string
+  count: number
+  userIds: number[]
 }

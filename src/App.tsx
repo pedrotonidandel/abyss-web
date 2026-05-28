@@ -3,6 +3,7 @@ import { useAppStore } from './store/useAppStore'
 import { api } from './api'
 import { localAddonUrlStore, localAddonStore } from './utils/localStore'
 import { BottomNav } from './components/layout/BottomNav'
+import { Sidebar } from './components/layout/Sidebar'
 import { AbyssLogo } from './components/ui/AbyssLogo'
 import { LoginPage } from './pages/LoginPage'
 import { HomePage } from './pages/HomePage'
@@ -17,22 +18,30 @@ type AppState = 'loading' | 'login' | 'app'
 type Page = 'home' | 'browse' | 'library' | 'releases' | 'profile'
 
 export default function App() {
-  const [appState, setAppState] = useState<AppState>('loading')
-  const [page, setPage] = useState<Page>('home')
+  const [appState, setAppState]     = useState<AppState>('loading')
+  const [page, setPage]             = useState<Page>('home')
   const [detailItem, setDetailItem] = useState<{ item: DownloadItem; source: Source } | null>(null)
   const [viewedUserId, setViewedUserId] = useState<number | null>(null)
-  const [unreadCount, setUnreadCount] = useState(0)
+  const [unreadCount, setUnreadCount]   = useState(0)
 
   const { setUser, setSources, setLibrary } = useAppStore()
 
-  const openDetail = (item: DownloadItem, source: Source) => {
-    setDetailItem({ item, source })
-  }
+  const openDetail = (item: DownloadItem, source: Source) => setDetailItem({ item, source })
 
   const openUserProfile = (userId: number) => {
     setViewedUserId(userId)
     setPage('profile')
     setDetailItem(null)
+  }
+
+  const navigate = (p: string) => {
+    if (p.startsWith('profile:')) {
+      setViewedUserId(parseInt(p.slice(8)))
+      setPage('profile')
+    } else {
+      setPage(p as Page)
+      setViewedUserId(null)
+    }
   }
 
   useEffect(() => {
@@ -76,7 +85,6 @@ export default function App() {
     setSources(sources)
     setLibrary(serverItems)
     setAppState('app')
-    // fetch unread notification count
     api.notifications.unreadCount().then(setUnreadCount).catch(() => {})
     api.notifications.markReadByType('download_complete').catch(() => {})
   }
@@ -100,35 +108,56 @@ export default function App() {
   if (appState === 'login') return <LoginPage onSuccess={handleLoginSuccess} />
 
   return (
-    <div className="flex flex-col h-dvh overflow-hidden" style={{ background: '#0d0d0d' }}>
-      <main className="flex-1 overflow-hidden relative">
-        {detailItem ? (
-          <DetailPage item={detailItem.item} source={detailItem.source} onClose={() => setDetailItem(null)} />
-        ) : (
-          <>
-            {page === 'home'     && <HomePage onOpenDetail={openDetail} />}
-            {page === 'browse'   && <BrowsePage onOpenDetail={openDetail} />}
-            {page === 'library'  && <LibraryPage onOpenDetail={openDetail} />}
-            {page === 'releases' && <ReleasesPage />}
-            {page === 'profile'  && <ProfilePage onLogout={handleLogout} viewedUserId={viewedUserId} onNavigate={(p) => {
-              if (p.startsWith('profile:')) {
-                setViewedUserId(parseInt(p.slice(8)))
-                setPage('profile')
-              } else {
-                setPage(p as Page)
-                setViewedUserId(null)
-              }
-            }} />}
-          </>
-        )}
-      </main>
-      {!detailItem && (
-        <BottomNav
+    <div className="flex h-dvh overflow-hidden" style={{ background: '#0d0d0d' }}>
+
+      {/* ── Sidebar (tablet/desktop only) ── */}
+      <div className="hidden md:flex">
+        <Sidebar
           activePage={page}
-          onNavigate={(p) => { setPage(p as Page); setViewedUserId(null) }}
+          onNavigate={(p) => { setDetailItem(null); navigate(p) }}
           unreadCount={unreadCount}
         />
-      )}
+      </div>
+
+      {/* ── Main column ── */}
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+
+        {/* Page content */}
+        <main className="flex-1 overflow-hidden relative">
+          {detailItem ? (
+            <DetailPage
+              item={detailItem.item}
+              source={detailItem.source}
+              onClose={() => setDetailItem(null)}
+            />
+          ) : (
+            <>
+              {page === 'home'     && <HomePage onOpenDetail={openDetail} />}
+              {page === 'browse'   && <BrowsePage onOpenDetail={openDetail} />}
+              {page === 'library'  && <LibraryPage onOpenDetail={openDetail} />}
+              {page === 'releases' && <ReleasesPage />}
+              {page === 'profile'  && (
+                <ProfilePage
+                  onLogout={handleLogout}
+                  viewedUserId={viewedUserId}
+                  onNavigate={(p) => { navigate(p) }}
+                />
+              )}
+            </>
+          )}
+        </main>
+
+        {/* ── Bottom nav (mobile only) ── */}
+        {!detailItem && (
+          <div className="block md:hidden">
+            <BottomNav
+              activePage={page}
+              onNavigate={(p) => { navigate(p) }}
+              unreadCount={unreadCount}
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
 }

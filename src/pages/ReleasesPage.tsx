@@ -92,7 +92,7 @@ function ReleaseItem({ release, currentUserId }: ReleaseItemProps) {
       {expanded && (
         <div className="px-4 pb-4 flex flex-col gap-4">
           {/* Changelog */}
-          <div className="p-3 rounded-xl text-sm whitespace-pre-wrap" style={{ background: '#0f0f0f', color: '#ccc' }}>
+          <div className="p-3 rounded-xl text-sm whitespace-pre-wrap" style={{ background: '#0f0f0f', color: '#ccc', maxHeight: 220, overflowY: 'auto' }}>
             {release.changelog}
           </div>
 
@@ -129,7 +129,7 @@ function ReleaseItem({ release, currentUserId }: ReleaseItemProps) {
 
             {loadingComments && <p className="text-xs" style={{ color: '#555' }}>Carregando…</p>}
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2" style={{ maxHeight: 260, overflowY: 'auto' }}>
               {comments.map((c) => (
                 <div key={c.id} className="flex items-start gap-2">
                   <div className="flex-1 p-2.5 rounded-xl" style={{ background: '#0f0f0f' }}>

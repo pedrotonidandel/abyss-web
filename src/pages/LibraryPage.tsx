@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Heart, Eye, Film, Tv, BookOpen, Sparkles } from 'lucide-react'
+import { Heart, Eye, Film, Tv, BookOpen, Sparkles, Trash2 } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { api } from '../api'
 import type { ContentCategory, DownloadItem, Source, LibraryItemServer } from '../types'
@@ -38,11 +38,12 @@ interface LibraryPageProps {
   onOpenDetail: (item: DownloadItem, source: Source) => void
 }
 
-function LibraryCard({ entry, catColor, onLike, onWatched, onClick }: {
+function LibraryCard({ entry, catColor, onLike, onWatched, onRemove, onClick }: {
   entry: LibraryItemServer
   catColor: string
   onLike: () => void
   onWatched: () => void
+  onRemove: () => void
   onClick: () => void
 }) {
   const CatIcon = CAT_ICONS[entry.category]
@@ -96,6 +97,13 @@ function LibraryCard({ entry, catColor, onLike, onWatched, onClick }: {
             <Eye size={14} />
             {entry.watched ? 'Visto' : 'Marcar como visto'}
           </button>
+          <button
+            className="flex items-center gap-1 text-xs ml-auto"
+            style={{ color: '#444' }}
+            onClick={(e) => { e.stopPropagation(); onRemove() }}
+          >
+            <Trash2 size={13} />
+          </button>
         </div>
       </div>
     </div>
@@ -103,7 +111,7 @@ function LibraryCard({ entry, catColor, onLike, onWatched, onClick }: {
 }
 
 export function LibraryPage({ onOpenDetail }: LibraryPageProps) {
-  const { library, activeCategory, setActiveCategory, toggleLikedInStore, toggleWatchedInStore, sources } = useAppStore()
+  const { library, activeCategory, setActiveCategory, toggleLikedInStore, toggleWatchedInStore, setLibrary, sources } = useAppStore()
 
   const filtered = useMemo(
     () => library.filter((l) => l.category === activeCategory),
@@ -118,6 +126,14 @@ export function LibraryPage({ onOpenDetail }: LibraryPageProps) {
   const handleWatched = async (id: string) => {
     toggleWatchedInStore(id)
     try { await api.library.toggleWatched(id) } catch { toggleWatchedInStore(id) }
+  }
+
+  const handleRemove = async (id: string, title: string) => {
+    if (!confirm(`Remover "${title}" da biblioteca?`)) return
+    try {
+      await api.library.remove(id)
+      setLibrary(library.filter((l) => l.id !== id))
+    } catch { /* ignore */ }
   }
 
   const handleOpen = (entry: LibraryItemServer) => {
@@ -188,6 +204,7 @@ export function LibraryPage({ onOpenDetail }: LibraryPageProps) {
                 catColor={catInfo?.color ?? '#888'}
                 onLike={() => handleLike(entry.id)}
                 onWatched={() => handleWatched(entry.id)}
+                onRemove={() => handleRemove(entry.id, entry.title)}
                 onClick={() => handleOpen(entry)}
               />
             ))}

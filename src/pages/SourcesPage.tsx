@@ -10,7 +10,6 @@ const CATEGORY_OPTIONS: { value: ContentCategory; label: string; color: string }
   { value: 'series',  label: 'Séries', color: '#00b4ff' },
   { value: 'animes',  label: 'Animes', color: '#a855f7' },
   { value: 'books',   label: 'Livros', color: '#22c55e' },
-  { value: 'games',   label: 'Jogos',  color: '#f97316' },
 ]
 
 function parseAddonJson(json: unknown): DownloadItem[] {

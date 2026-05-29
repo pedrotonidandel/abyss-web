@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import { readFileSync } from 'fs'
+import { resolve } from 'path'
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8')) as { version: string }
 
@@ -48,4 +49,12 @@ export default defineConfig({
       },
     }),
   ],
+  resolve: {
+    alias: {
+      // Use WebTorrent's pre-built browser bundle instead of bundling from source.
+      // The source tree pulls in Node.js-only deps (bittorrent-dht, MSE/RC4 native crypto, etc.)
+      // that can't be compiled for browser. The dist bundle is already resolved for browser/WebRTC use.
+      'webtorrent': resolve(__dirname, 'node_modules/webtorrent/dist/webtorrent.min.js'),
+    },
+  },
 })

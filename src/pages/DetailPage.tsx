@@ -512,7 +512,7 @@ export function DetailPage({ item, source, onClose }: DetailPageProps) {
           {detail?.developer && (
             <div style={{ marginBottom: 20 }}>
               <p style={{ fontSize: 13, color: 'var(--lv-muted)', margin: 0 }}>
-                {category === 'books' ? 'Autor' : category === 'games' ? 'Desenvolvedora' : 'Direção / Criação'}
+                {category === 'books' ? 'Autor' : (category as string) === 'games' ? 'Desenvolvedora' : 'Direção / Criação'}
                 {': '}
                 <span style={{ color: 'var(--lv-text)', fontWeight: 600 }}>{detail.developer}</span>
               </p>

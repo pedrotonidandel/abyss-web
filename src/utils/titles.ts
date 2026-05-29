@@ -428,7 +428,7 @@ export function computeStats(library: LibraryItemServer[], totalComments: number
     totalCompleted:   completed.length,
     completedMovies:  completed.filter((l) => l.category === 'movies').length,
     completedSeries:  completed.filter((l) => l.category === 'series').length,
-    completedGames:   completed.filter((l) => l.category === 'games').length,
+    completedGames:   completed.filter((l) => (l.category as string) === 'games').length,
     completedBooks:   completed.filter((l) => l.category === 'books').length,
     completedAnimes:  completed.filter((l) => l.category === 'animes').length,
     likedCount:       library.filter((l) => l.liked).length,

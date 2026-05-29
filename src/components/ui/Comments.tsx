@@ -34,7 +34,7 @@ function StarRating({ value, onChange }: { value: number; onChange?: (v: number)
           key={n}
           type="button"
           onClick={() => onChange?.(n)}
-          style={{ color: n <= value ? '#f59e0b' : '#444' }}
+          style={{ color: n <= value ? '#f59e0b' : 'var(--lv-muted)' }}
         >
           <Star size={16} fill={n <= value ? '#f59e0b' : 'none'} />
         </button>
@@ -145,10 +145,10 @@ export function Comments({ contentKey, currentUserId }: CommentsProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h3 className="text-sm font-semibold" style={{ color: '#e0e0e0' }}>Comentários ({topLevel.length})</h3>
+      <h3 className="text-sm font-semibold" style={{ color: 'var(--lv-text)' }}>Comentários ({topLevel.length})</h3>
 
       {/* New comment form */}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2 p-3 rounded-xl" style={{ background: '#1a1a1a', border: '1px solid #1e1e1e' }}>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2 p-3 rounded-xl" style={{ background: 'var(--panel)', border: '1px solid var(--divider)' }}>
         <StarRating value={newRating} onChange={setNewRating} />
         <textarea
           value={newContent}
@@ -156,13 +156,13 @@ export function Comments({ contentKey, currentUserId }: CommentsProps) {
           placeholder="Escreva um comentário…"
           rows={3}
           className="w-full resize-none rounded-lg p-2 text-sm outline-none"
-          style={{ background: '#111111', border: '1px solid #2a2a2a', color: '#e0e0e0' }}
+          style={{ background: 'var(--chip)', border: '1px solid var(--divider)', color: 'var(--lv-text)' }}
         />
         <button
           type="submit"
           disabled={submitting || !newContent.trim()}
           className="self-end px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-40"
-          style={{ background: '#00b4ff', color: '#000' }}
+          style={{ background: 'var(--brand-yellow)', color: '#0d111a' }}
         >
           Publicar
         </button>
@@ -170,10 +170,10 @@ export function Comments({ contentKey, currentUserId }: CommentsProps) {
 
       {/* Reply form */}
       {replyTo && (
-        <form onSubmit={handleReply} className="flex flex-col gap-2 p-3 rounded-xl" style={{ background: '#1a1a1a', border: '1px solid #1e1e1e' }}>
+        <form onSubmit={handleReply} className="flex flex-col gap-2 p-3 rounded-xl" style={{ background: 'var(--panel)', border: '1px solid var(--divider)' }}>
           <div className="flex items-center justify-between">
-            <span className="text-xs" style={{ color: '#888' }}>Respondendo a @{replyTo.username}</span>
-            <button type="button" onClick={() => setReplyTo(null)} className="text-xs" style={{ color: '#555' }}>Cancelar</button>
+            <span className="text-xs" style={{ color: 'var(--lv-muted)' }}>Respondendo a @{replyTo.username}</span>
+            <button type="button" onClick={() => setReplyTo(null)} className="text-xs" style={{ color: 'var(--lv-muted)' }}>Cancelar</button>
           </div>
           <textarea
             value={replyContent}
@@ -181,20 +181,20 @@ export function Comments({ contentKey, currentUserId }: CommentsProps) {
             placeholder="Sua resposta…"
             rows={2}
             className="w-full resize-none rounded-lg p-2 text-sm outline-none"
-            style={{ background: '#111111', border: '1px solid #2a2a2a', color: '#e0e0e0' }}
+            style={{ background: 'var(--chip)', border: '1px solid var(--divider)', color: 'var(--lv-text)' }}
           />
           <button
             type="submit"
             disabled={submitting || !replyContent.trim()}
             className="self-end px-4 py-1.5 rounded-lg text-sm font-medium disabled:opacity-40"
-            style={{ background: '#00b4ff', color: '#000' }}
+            style={{ background: 'var(--brand-yellow)', color: '#0d111a' }}
           >
             Responder
           </button>
         </form>
       )}
 
-      {loading && <p className="text-xs text-center" style={{ color: '#555' }}>Carregando…</p>}
+      {loading && <p className="text-xs text-center" style={{ color: 'var(--lv-muted)' }}>Carregando…</p>}
 
       <div className="flex flex-col gap-3">
         {topLevel.map((c) => {
@@ -203,47 +203,47 @@ export function Comments({ contentKey, currentUserId }: CommentsProps) {
           return (
             <div key={c.id} className="flex flex-col gap-2">
               {/* Comment card */}
-              <div className="p-3 rounded-xl" style={{ background: '#111111', border: '1px solid #1e1e1e' }}>
+              <div className="p-3 rounded-xl" style={{ background: 'var(--panel)', border: '1px solid var(--divider)' }}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex flex-col flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
                         className="text-xs font-semibold hover:underline"
-                        style={{ color: '#00b4ff' }}
+                        style={{ color: 'var(--brand-yellow)' }}
                         onClick={() => openProfile(c.userId)}
                       >
                         {c.displayName || c.username}
                       </button>
                       {c.rating && <StarRating value={c.rating} />}
-                      <span className="text-[10px]" style={{ color: '#444' }}>{formatDate(c.createdAt)}</span>
+                      <span className="text-[10px]" style={{ color: 'var(--lv-muted)' }}>{formatDate(c.createdAt)}</span>
                     </div>
-                    <p className="text-sm mt-1 break-words" style={{ color: '#e0e0e0' }}>{c.content}</p>
+                    <p className="text-sm mt-1 break-words" style={{ color: 'var(--lv-text)' }}>{c.content}</p>
                   </div>
                   {c.userId === currentUserId && (
-                    <button onClick={() => handleDelete(c.id)} style={{ color: '#444' }}>
+                    <button onClick={() => handleDelete(c.id)} style={{ color: 'var(--lv-muted)' }}>
                       <Trash2 size={14} />
                     </button>
                   )}
                 </div>
                 <div className="flex items-center gap-3 mt-2">
                   <button className="flex items-center gap-1 text-xs"
-                    style={{ color: c.userVote === 'like' ? '#00b4ff' : '#555' }}
+                    style={{ color: c.userVote === 'like' ? 'var(--brand-yellow)' : 'var(--lv-muted)' }}
                     onClick={() => handleVote(c.id, 'like')}>
                     <ThumbsUp size={13} /> {c.likes}
                   </button>
                   <button className="flex items-center gap-1 text-xs"
-                    style={{ color: c.userVote === 'dislike' ? '#ff4444' : '#555' }}
+                    style={{ color: c.userVote === 'dislike' ? '#ff4444' : 'var(--lv-muted)' }}
                     onClick={() => handleVote(c.id, 'dislike')}>
                     <ThumbsDown size={13} /> {c.dislikes}
                   </button>
                   <button className="flex items-center gap-1 text-xs"
-                    style={{ color: '#555' }}
+                    style={{ color: 'var(--lv-muted)' }}
                     onClick={() => setReplyTo({ id: c.id, username: c.username })}>
                     <Reply size={13} /> Responder
                   </button>
                   {reps.length > 0 && (
                     <button className="flex items-center gap-1 text-xs ml-auto"
-                      style={{ color: '#555' }}
+                      style={{ color: 'var(--lv-muted)' }}
                       onClick={() => setExpanded((prev) => {
                         const s = new Set(prev)
                         if (s.has(c.id)) s.delete(c.id); else s.add(c.id)
@@ -258,35 +258,35 @@ export function Comments({ contentKey, currentUserId }: CommentsProps) {
 
               {/* Replies */}
               {isExpanded && reps.map((r) => (
-                <div key={r.id} className="ml-4 p-3 rounded-xl" style={{ background: '#0f0f0f', border: '1px solid #1a1a1a' }}>
+                <div key={r.id} className="ml-4 p-3 rounded-xl" style={{ background: 'var(--panel-2)', border: '1px solid var(--divider)' }}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex flex-col flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <button
                           className="text-xs font-semibold hover:underline"
-                          style={{ color: '#00b4ff' }}
+                          style={{ color: 'var(--brand-yellow)' }}
                           onClick={() => openProfile(r.userId)}
                         >
                           {r.displayName || r.username}
                         </button>
-                        <span className="text-[10px]" style={{ color: '#444' }}>{formatDate(r.createdAt)}</span>
+                        <span className="text-[10px]" style={{ color: 'var(--lv-muted)' }}>{formatDate(r.createdAt)}</span>
                       </div>
-                      <p className="text-sm mt-1 break-words" style={{ color: '#ccc' }}>{r.content}</p>
+                      <p className="text-sm mt-1 break-words" style={{ color: 'var(--lv-text)' }}>{r.content}</p>
                     </div>
                     {r.userId === currentUserId && (
-                      <button onClick={() => handleDelete(r.id)} style={{ color: '#444' }}>
+                      <button onClick={() => handleDelete(r.id)} style={{ color: 'var(--lv-muted)' }}>
                         <Trash2 size={14} />
                       </button>
                     )}
                   </div>
                   <div className="flex items-center gap-3 mt-2">
                     <button className="flex items-center gap-1 text-xs"
-                      style={{ color: r.userVote === 'like' ? '#00b4ff' : '#555' }}
+                      style={{ color: r.userVote === 'like' ? 'var(--brand-yellow)' : 'var(--lv-muted)' }}
                       onClick={() => handleVote(r.id, 'like')}>
                       <ThumbsUp size={13} /> {r.likes}
                     </button>
                     <button className="flex items-center gap-1 text-xs"
-                      style={{ color: r.userVote === 'dislike' ? '#ff4444' : '#555' }}
+                      style={{ color: r.userVote === 'dislike' ? '#ff4444' : 'var(--lv-muted)' }}
                       onClick={() => handleVote(r.id, 'dislike')}>
                       <ThumbsDown size={13} /> {r.dislikes}
                     </button>

@@ -2,9 +2,21 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { nodePolyfills } from 'vite-plugin-node-polyfills'
+import { readFileSync } from 'fs'
+
+const pkg = JSON.parse(readFileSync('./package.json', 'utf-8')) as { version: string }
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   plugins: [
+    // Node.js built-in polyfills required by WebTorrent (Buffer, process, stream, crypto, etc.)
+    nodePolyfills({
+      include: ['buffer', 'process', 'stream', 'util', 'events', 'path', 'os', 'crypto'],
+      globals: { Buffer: true, global: true, process: true },
+    }),
     react(),
     tailwindcss(),
     VitePWA({
@@ -14,8 +26,8 @@ export default defineConfig({
         name: 'Abyss',
         short_name: 'Abyss',
         description: 'Seu hub de entretenimento',
-        theme_color: '#111111',
-        background_color: '#0d0d0d',
+        theme_color: '#111720',
+        background_color: '#111720',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',

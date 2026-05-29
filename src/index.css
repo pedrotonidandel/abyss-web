@@ -1,26 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@700;800&display=swap');
 @import "tailwindcss";
 
-* {
-  box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
+:root {
+  --app-bg:       oklch(0.22 0.014 240);
+  --panel:        oklch(0.22 0.014 240);
+  --panel-2:      oklch(0.26 0.013 235);
+  --chip:         oklch(0.32 0.012 235);
+  --divider:      oklch(1 0 0 / 0.06);
+  --lv-text:      oklch(0.97 0.005 240);
+  --lv-muted:     oklch(0.70 0.015 240);
+  --brand-yellow: oklch(0.85 0.17 90);
+  --star:         oklch(0.85 0.17 85);
+  --danger:       #ef4444;
 }
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  background: #0d0d0d;
-  color: #e0e0e0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  overscroll-behavior: none;
+  background: var(--app-bg);
+  color: var(--lv-text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  overflow-x: hidden;
 }
 
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
-
-/* Safe area insets for notched devices */
+/* Safe area helpers for notched devices */
 .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
-.pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+.pt-safe { padding-top:    env(safe-area-inset-top,    0px); }
 
-/* Hide scrollbar for category tabs */
+/* Hide scrollbar utility */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Thin scrollbar for content areas */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: oklch(0.30 0.012 235); border-radius: 2px; }
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--panel) 25%, var(--panel-2) 50%, var(--panel) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite;
+  border-radius: 6px;
+}

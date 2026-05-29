@@ -13,12 +13,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [tab, setTab] = useState<AdminTab>('releases')
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden" style={{ background: 'var(--app-bg)' }}>
       <div className="shrink-0 px-4 pt-4 pb-2 flex items-center gap-3">
-        <button onClick={onBack} style={{ color: '#555' }}>
+        <button onClick={onBack} style={{ color: 'var(--lv-muted)' }}>
           <ArrowLeft size={22} />
         </button>
-        <h2 className="text-lg font-bold flex-1" style={{ color: '#e0e0e0' }}>Admin</h2>
+        <h2 className="text-lg font-bold flex-1" style={{ color: 'var(--lv-text)' }}>Admin</h2>
       </div>
 
       {/* Tabs */}
@@ -33,9 +33,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
             onClick={() => setTab(id)}
             className="px-3 py-1.5 rounded-full text-xs font-medium"
             style={{
-              background: tab === id ? '#00b4ff' : '#111111',
-              color: tab === id ? '#000' : '#888',
-              border: `1px solid ${tab === id ? '#00b4ff' : '#2a2a2a'}`,
+              background: tab === id ? 'var(--brand-yellow)' : 'var(--chip)',
+              color: tab === id ? '#0d111a' : 'var(--lv-muted)',
+              border: `1px solid ${tab === id ? 'var(--brand-yellow)' : 'var(--divider)'}`,
             }}
           >
             {label}
@@ -94,15 +94,15 @@ function AdminReleasesTab() {
   }
 
   const inputStyle: React.CSSProperties = {
-    background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#e0e0e0',
+    background: 'var(--chip)', border: '1px solid var(--divider)', color: 'var(--lv-text)',
     borderRadius: 10, padding: '10px 12px', fontSize: 14, outline: 'none', width: '100%',
   }
 
   return (
     <div className="h-full overflow-y-auto px-4 pb-4">
       <button
-        className="w-full py-2.5 rounded-xl text-sm font-medium mt-3 mb-3"
-        style={{ background: '#00b4ff', color: '#000' }}
+        className="w-full py-2.5 rounded-xl text-sm font-bold mt-3 mb-3"
+        style={{ background: 'var(--brand-yellow)', color: '#0d111a' }}
         onClick={() => setShowForm((v) => !v)}
       >
         {showForm ? 'Cancelar' : '+ Nova versão'}
@@ -110,30 +110,30 @@ function AdminReleasesTab() {
 
       {showForm && (
         <form onSubmit={handleCreate} className="flex flex-col gap-3 mb-4 p-4 rounded-2xl"
-          style={{ background: '#111111', border: '1px solid #1e1e1e' }}>
+          style={{ background: 'var(--panel)', border: '1px solid var(--divider)' }}>
           <input placeholder="Versão (ex: 1.2.3)" value={version} onChange={(e) => setVersion(e.target.value)} required style={inputStyle} />
           <input placeholder="Título" value={title} onChange={(e) => setTitle(e.target.value)} required style={inputStyle} />
           <textarea placeholder="Changelog…" value={changelog} onChange={(e) => setChangelog(e.target.value)} required rows={5}
-            style={{ ...inputStyle, resize: 'vertical' }} />
-          <button type="submit" disabled={submitting} className="py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
-            style={{ background: '#00b4ff', color: '#000' }}>
+            style={{ ...inputStyle, background: 'var(--panel-2)', resize: 'vertical' }} />
+          <button type="submit" disabled={submitting} className="py-2.5 rounded-xl text-sm font-bold disabled:opacity-50"
+            style={{ background: 'var(--brand-yellow)', color: '#0d111a' }}>
             {submitting ? 'Publicando…' : 'Publicar'}
           </button>
         </form>
       )}
 
       {loading ? (
-        <p className="text-sm text-center" style={{ color: '#555' }}>Carregando…</p>
+        <p className="text-sm text-center" style={{ color: 'var(--lv-muted)' }}>Carregando…</p>
       ) : (
         <div className="flex flex-col gap-2">
           {releases.map((r) => (
             <div key={r.id} className="flex items-start gap-3 p-3 rounded-xl"
-              style={{ background: '#111111', border: '1px solid #1e1e1e' }}>
+              style={{ background: 'var(--panel)', border: '1px solid var(--divider)' }}>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium" style={{ color: '#e0e0e0' }}>v{r.version} — {r.title}</p>
-                <p className="text-xs mt-0.5 line-clamp-2" style={{ color: '#555' }}>{r.changelog}</p>
+                <p className="text-sm font-medium" style={{ color: 'var(--lv-text)' }}>v{r.version} — {r.title}</p>
+                <p className="text-xs mt-0.5 line-clamp-2" style={{ color: 'var(--lv-muted)' }}>{r.changelog}</p>
               </div>
-              <button onClick={() => handleDelete(r.id)} style={{ color: '#ff4444' }}>
+              <button onClick={() => handleDelete(r.id)} style={{ color: '#ef4444' }}>
                 <Trash2 size={16} />
               </button>
             </div>
@@ -170,19 +170,19 @@ function AdminUsersTab() {
     <div className="h-full overflow-y-auto px-4 pb-4">
       {loading ? (
         <div className="flex items-center justify-center h-20">
-          <p className="text-sm" style={{ color: '#555' }}>Carregando…</p>
+          <p className="text-sm" style={{ color: 'var(--lv-muted)' }}>Carregando…</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2 pt-3">
           {users.map((u) => (
             <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl"
-              style={{ background: '#111111', border: '1px solid #1e1e1e' }}>
+              style={{ background: 'var(--panel)', border: '1px solid var(--divider)' }}>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium" style={{ color: '#e0e0e0' }}>{u.displayName ?? u.username}</p>
-                <p className="text-xs" style={{ color: '#555' }}>@{u.username} · {u.libraryCount} itens · {u.commentCount} comentários</p>
+                <p className="text-sm font-medium" style={{ color: 'var(--lv-text)' }}>{u.displayName ?? u.username}</p>
+                <p className="text-xs" style={{ color: 'var(--lv-muted)' }}>@{u.username} · {u.libraryCount} itens · {u.commentCount} comentários</p>
               </div>
               <button onClick={() => handleToggleAdmin(u.id, u.isAdmin)}
-                style={{ color: u.isAdmin ? '#00b4ff' : '#444' }}>
+                style={{ color: u.isAdmin ? 'var(--brand-yellow)' : 'var(--lv-muted)' }}>
                 {u.isAdmin ? <Shield size={18} /> : <ShieldOff size={18} />}
               </button>
             </div>
@@ -200,7 +200,7 @@ const BUG_STATUS_LABELS: Record<BugReport['status'], string> = {
 }
 
 const BUG_STATUS_COLORS: Record<BugReport['status'], string> = {
-  aberto: '#ff4444',
+  aberto: '#ef4444',
   em_analise: '#f59e0b',
   resolvido: '#22c55e',
 }
@@ -234,27 +234,31 @@ function AdminBugsTab() {
     <div className="h-full overflow-y-auto px-4 pb-4">
       {loading ? (
         <div className="flex items-center justify-center h-20">
-          <p className="text-sm" style={{ color: '#555' }}>Carregando…</p>
+          <p className="text-sm" style={{ color: 'var(--lv-muted)' }}>Carregando…</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2 pt-3">
           {bugs.length === 0 ? (
-            <p className="text-sm text-center py-8" style={{ color: '#555' }}>Nenhum bug reportado.</p>
+            <p className="text-sm text-center py-8" style={{ color: 'var(--lv-muted)' }}>Nenhum bug reportado.</p>
           ) : bugs.map((b) => (
             <div key={b.id} className="p-3 rounded-xl flex flex-col gap-1.5"
-              style={{ background: '#111111', border: '1px solid #1e1e1e' }}>
+              style={{ background: 'var(--panel)', border: '1px solid var(--divider)' }}>
               <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-medium flex-1" style={{ color: '#e0e0e0' }}>{b.title}</p>
+                <p className="text-sm font-medium flex-1" style={{ color: 'var(--lv-text)' }}>{b.title}</p>
                 <button
                   onClick={() => handleStatus(b.id)}
                   className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium"
-                  style={{ background: BUG_STATUS_COLORS[b.status] + '20', color: BUG_STATUS_COLORS[b.status] }}
+                  style={{
+                    background: 'var(--chip)',
+                    border: '1px solid var(--divider)',
+                    color: BUG_STATUS_COLORS[b.status],
+                  }}
                 >
                   {BUG_STATUS_LABELS[b.status]}
                 </button>
               </div>
-              <p className="text-xs line-clamp-2" style={{ color: '#888' }}>{b.description}</p>
-              <p className="text-[10px]" style={{ color: '#444' }}>
+              <p className="text-xs line-clamp-2" style={{ color: 'var(--lv-muted)' }}>{b.description}</p>
+              <p className="text-[10px]" style={{ color: 'var(--lv-muted)' }}>
                 {b.displayName ?? b.username} · {b.category} · {new Date(b.createdAt).toLocaleDateString('pt-BR')}
               </p>
             </div>

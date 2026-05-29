@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { Heart, Eye, Film, Tv, BookOpen, Sparkles, Trash2 } from 'lucide-react'
+import { Heart, Eye, Film, Tv, BookOpen, Sparkles, Bell, X } from 'lucide-react'
+// BookOpen kept for CAT_ICONS map (books items may still exist in persisted library data)
 import { useAppStore } from '../store/useAppStore'
 import { api } from '../api'
 import type { ContentCategory, DownloadItem, Source, LibraryItemServer } from '../types'
@@ -7,7 +8,6 @@ import type { ContentCategory, DownloadItem, Source, LibraryItemServer } from '.
 const CATEGORIES: { id: ContentCategory; label: string; color: string }[] = [
   { id: 'movies',  label: 'Filmes',  color: '#e5a00d' },
   { id: 'series',  label: 'Séries',  color: '#00b4ff' },
-  { id: 'books',   label: 'Livros',  color: '#22c55e' },
   { id: 'animes',  label: 'Animes',  color: '#a855f7' },
 ]
 
@@ -20,8 +20,8 @@ const STATUS_LABELS: Record<LibraryItemServer['status'], string> = {
 }
 
 const STATUS_COLORS: Record<LibraryItemServer['status'], string> = {
-  queued: '#888',
-  downloading: '#00b4ff',
+  queued: 'var(--lv-muted)',
+  downloading: 'var(--brand-yellow)',
   completed: '#22c55e',
   paused: '#f59e0b',
   error: '#ff4444',
@@ -34,13 +34,22 @@ const CAT_ICONS: Record<ContentCategory, React.ComponentType<{ size?: number }>>
   animes: Sparkles,
 }
 
-interface LibraryPageProps {
-  onOpenDetail: (item: DownloadItem, source: Source) => void
+const CAT_EMOJIS: Record<ContentCategory, string> = {
+  movies: '🎬',
+  series: '📺',
+  books: '📚',
+  animes: '🌸',
 }
 
-function LibraryCard({ entry, catColor, onLike, onWatched, onRemove, onClick }: {
+interface LibraryPageProps {
+  onOpenDetail: (item: DownloadItem, source: Source) => void
+  unreadCount?: number
+  onNotifOpen?: () => void
+}
+
+function LibraryCard({ entry, index, onLike, onWatched, onRemove, onClick }: {
   entry: LibraryItemServer
-  catColor: string
+  index: number
   onLike: () => void
   onWatched: () => void
   onRemove: () => void
@@ -49,68 +58,123 @@ function LibraryCard({ entry, catColor, onLike, onWatched, onRemove, onClick }: 
   const CatIcon = CAT_ICONS[entry.category]
   return (
     <div
-      className="flex gap-3 p-3 rounded-xl cursor-pointer active:opacity-80"
-      style={{ background: '#111111', border: '1px solid #1e1e1e' }}
       onClick={onClick}
+      style={{
+        position: 'relative',
+        borderRadius: 14,
+        overflow: 'hidden',
+        aspectRatio: '2/3',
+        cursor: 'pointer',
+        background: 'var(--panel)',
+        animation: `fadeInUp 0.25s ease forwards`,
+        animationDelay: `${index * 0.05}s`,
+        opacity: 0,
+      }}
+      className="active:scale-95 transition-transform"
     >
       {/* Cover */}
-      <div className="shrink-0 w-14 h-20 rounded-lg overflow-hidden flex items-center justify-center"
-        style={{ background: '#1a1a1a' }}>
-        {entry.coverUrl ? (
-          <img src={entry.coverUrl} alt={entry.title} className="w-full h-full object-cover" loading="lazy" />
-        ) : (
-          <CatIcon size={24} />
-        )}
-      </div>
+      {entry.coverUrl ? (
+        <img
+          src={entry.coverUrl}
+          alt={entry.title}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          loading="lazy"
+        />
+      ) : (
+        <div style={{
+          width: '100%', height: '100%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 36,
+        }}>
+          <CatIcon size={40} />
+        </div>
+      )}
 
-      <div className="flex-1 min-w-0 flex flex-col justify-between">
-        <div>
-          <p className="text-sm font-medium leading-tight line-clamp-2" style={{ color: '#e0e0e0' }}>{entry.title}</p>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium"
-              style={{ background: STATUS_COLORS[entry.status] + '20', color: STATUS_COLORS[entry.status] }}>
-              {STATUS_LABELS[entry.status]}
-            </span>
-            <span className="text-[10px]" style={{ color: catColor }}>{entry.category}</span>
+      {/* Remove button — top-left × */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onRemove() }}
+        style={{
+          position: 'absolute', top: 6, left: 6,
+          width: 20, height: 20, borderRadius: '50%',
+          background: 'rgba(0,0,0,0.6)',
+          border: 'none', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <X size={11} style={{ color: '#fff' }} />
+      </button>
+
+      {/* Status dot — top-right */}
+      <div style={{
+        position: 'absolute', top: 8, right: 8,
+        width: 8, height: 8, borderRadius: '50%',
+        background: STATUS_COLORS[entry.status],
+        boxShadow: `0 0 4px ${STATUS_COLORS[entry.status]}`,
+      }} />
+
+      {/* Bottom gradient + info */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        background: 'linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.5) 50%, transparent 100%)',
+        padding: '28px 8px 8px',
+      }}>
+        <p style={{
+          fontSize: 11, fontWeight: 600, color: '#fff', margin: 0, lineHeight: 1.3,
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+        }}>
+          {entry.title}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+          <span style={{
+            fontSize: 9, fontWeight: 700, color: STATUS_COLORS[entry.status],
+            textTransform: 'uppercase', letterSpacing: '0.5px',
+          }}>
+            {STATUS_LABELS[entry.status]}
+          </span>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); onLike() }}
+              style={{
+                width: 24, height: 24, borderRadius: 6, border: 'none', cursor: 'pointer',
+                background: 'rgba(0,0,0,0.5)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <Heart
+                size={12}
+                fill={entry.liked ? '#ff4466' : 'none'}
+                style={{ color: entry.liked ? '#ff4466' : '#fff' }}
+              />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onWatched() }}
+              style={{
+                width: 24, height: 24, borderRadius: 6, border: 'none', cursor: 'pointer',
+                background: 'rgba(0,0,0,0.5)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <Eye size={12} style={{ color: entry.watched ? '#22c55e' : '#fff' }} />
+            </button>
           </div>
-          {entry.status === 'downloading' && (
-            <div className="mt-1.5 h-1 rounded-full overflow-hidden" style={{ background: '#2a2a2a' }}>
-              <div className="h-full rounded-full" style={{ width: `${entry.progress}%`, background: '#00b4ff' }} />
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-3 mt-2">
-          <button
-            className="flex items-center gap-1 text-xs"
-            style={{ color: entry.liked ? '#ff4466' : '#555' }}
-            onClick={(e) => { e.stopPropagation(); onLike() }}
-          >
-            <Heart size={14} fill={entry.liked ? '#ff4466' : 'none'} />
-            Curtido
-          </button>
-          <button
-            className="flex items-center gap-1 text-xs"
-            style={{ color: entry.watched ? '#22c55e' : '#555' }}
-            onClick={(e) => { e.stopPropagation(); onWatched() }}
-          >
-            <Eye size={14} />
-            {entry.watched ? 'Visto' : 'Marcar como visto'}
-          </button>
-          <button
-            className="flex items-center gap-1 text-xs ml-auto"
-            style={{ color: '#444' }}
-            onClick={(e) => { e.stopPropagation(); onRemove() }}
-          >
-            <Trash2 size={13} />
-          </button>
         </div>
       </div>
+
+      {/* Progress bar — only when downloading */}
+      {entry.status === 'downloading' && (
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, background: 'rgba(255,255,255,0.15)' }}>
+          <div style={{ height: '100%', width: `${entry.progress ?? 0}%`, background: 'var(--brand-yellow)' }} />
+        </div>
+      )}
     </div>
   )
 }
 
-export function LibraryPage({ onOpenDetail }: LibraryPageProps) {
+export function LibraryPage({
+  onOpenDetail,
+  unreadCount,
+  onNotifOpen,
+}: LibraryPageProps) {
   const { library, activeCategory, setActiveCategory, toggleLikedInStore, toggleWatchedInStore, setLibrary, sources } = useAppStore()
 
   const filtered = useMemo(
@@ -167,20 +231,74 @@ export function LibraryPage({ onOpenDetail }: LibraryPageProps) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      <style>{`
+        .library-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 10px;
+          padding: 12px;
+        }
+        @media (min-width: 600px) {
+          .library-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (min-width: 900px) {
+          .library-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+
       {/* Top bar */}
-      <div className="shrink-0 px-4 pt-4 pb-2 flex flex-col gap-3" style={{ background: '#0d0d0d' }}>
-        <h2 className="text-lg font-bold" style={{ color: '#e0e0e0' }}>Biblioteca</h2>
-        {/* Category tabs */}
-        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-          {CATEGORIES.map(({ id, label, color }) => (
+      <div
+        className="shrink-0 flex flex-col gap-2"
+        style={{ background: 'var(--app-bg)', borderBottom: '1px solid var(--divider)' }}
+      >
+        {/* Header row: title + count + bell */}
+        <div className="flex items-center justify-between px-4 pt-4">
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-lg font-bold" style={{ color: 'var(--lv-text)' }}>Biblioteca</h2>
+            <span className="text-xs" style={{ color: 'var(--lv-muted)' }}>
+              {filtered.length} {filtered.length === 1 ? 'título' : 'títulos'}
+            </span>
+          </div>
+          <button
+            onClick={onNotifOpen}
+            style={{
+              position: 'relative', width: 36, height: 36,
+              borderRadius: '50%', background: 'var(--chip)',
+              border: '1px solid var(--divider)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <Bell size={18} style={{ color: (unreadCount ?? 0) > 0 ? 'var(--brand-yellow)' : 'var(--lv-muted)' }} />
+            {(unreadCount ?? 0) > 0 && (
+              <span style={{
+                position: 'absolute', top: 6, right: 6,
+                width: 7, height: 7, borderRadius: '50%',
+                background: 'var(--brand-yellow)',
+              }} />
+            )}
+          </button>
+        </div>
+
+        {/* Category tabs — underline style */}
+        <div className="flex overflow-x-auto no-scrollbar px-4 pb-0">
+          {CATEGORIES.map(({ id, label }) => (
             <button
               key={id}
               onClick={() => setActiveCategory(id)}
-              className="shrink-0 px-4 py-1.5 rounded-full text-xs font-medium"
+              className="shrink-0 px-4 py-2 text-xs font-semibold"
               style={{
-                background: activeCategory === id ? color : '#111111',
-                color: activeCategory === id ? '#000' : '#888',
-                border: `1px solid ${activeCategory === id ? color : '#2a2a2a'}`,
+                color: activeCategory === id ? 'var(--lv-text)' : 'var(--lv-muted)',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: activeCategory === id
+                  ? '2px solid var(--brand-yellow)'
+                  : '2px solid transparent',
+                cursor: 'pointer',
               }}
             >
               {label}
@@ -190,18 +308,21 @@ export function LibraryPage({ onOpenDetail }: LibraryPageProps) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4">
+      <div className="flex-1 overflow-y-auto" style={{ background: 'var(--app-bg)' }}>
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 gap-2">
-            <p className="text-sm" style={{ color: '#555' }}>Nenhum item em {catInfo?.label ?? activeCategory}.</p>
+          <div className="flex flex-col items-center justify-center h-48 gap-3">
+            <span style={{ fontSize: 48 }}>{CAT_EMOJIS[activeCategory] ?? '🎬'}</span>
+            <p className="text-sm" style={{ color: 'var(--lv-muted)' }}>
+              Nenhum item em {catInfo?.label ?? activeCategory}.
+            </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-3 pt-3">
-            {filtered.map((entry) => (
+          <div className="library-grid">
+            {filtered.map((entry, index) => (
               <LibraryCard
                 key={entry.id}
                 entry={entry}
-                catColor={catInfo?.color ?? '#888'}
+                index={index}
                 onLike={() => handleLike(entry.id)}
                 onWatched={() => handleWatched(entry.id)}
                 onRemove={() => handleRemove(entry.id, entry.title)}
@@ -211,6 +332,7 @@ export function LibraryPage({ onOpenDetail }: LibraryPageProps) {
           </div>
         )}
       </div>
+
     </div>
   )
 }

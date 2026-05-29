@@ -21,6 +21,18 @@ export interface StreamingProvider {
   url: string | null
 }
 
+export interface TmdbSeasonEp {
+  number:  number
+  title:   string
+  airDate: string | null
+  still:   string | null  // episode thumbnail URL
+}
+
+export interface TmdbSeason {
+  seasonNumber: number
+  episodes: TmdbSeasonEp[]
+}
+
 const STREAMING_SEARCH_URLS: Record<string, string> = {
   'Netflix':              'https://www.netflix.com/search?q=',
   'Amazon Prime Video':   'https://www.primevideo.com/search/ref=atv_nb_sr?phrase=',
@@ -55,6 +67,9 @@ export interface ApiDetail extends ApiEnrichment {
   trailerUrl: string | null  // YouTube embed URL
   cast: CastMember[]
   streamingServices: StreamingProvider[]
+  tmdbId?: number           // store resolved TMDB ID
+  runtime?: number          // runtime in minutes (movies)
+  tmdbSeasons?: TmdbSeason[] // for series/animes
 }
 
 // Item returned by the TMDB catalog browser
@@ -244,6 +259,8 @@ export async function fetchDetail(
         cast: buildCast(credits),
         streamingServices,
         buyLinks: [],
+        tmdbId: movieId,
+        runtime: (detail.runtime as number | null) ?? undefined,
       }
     }
 
@@ -274,6 +291,26 @@ export async function fetchDetail(
       const seriesTitle = (detail.name ?? detail.original_name) as string
       const provBR = providers.results?.BR ?? {}
       const { services: streamingServices } = buildStreaming(provBR, seriesTitle)
+      const numberOfSeasons = Math.min((detail.number_of_seasons as number) ?? 1, 5)
+      const seasonNums = Array.from({ length: numberOfSeasons }, (_, i) => i + 1)
+      const tmdbSeasons: TmdbSeason[] = await Promise.all(
+        seasonNums.map(async (n) => {
+          try {
+            const s = await fetchJson<{ episodes: { episode_number: number; name: string; air_date: string | null; still_path: string | null }[] }>(
+              `${API.tmdbApi}/tv/${seriesId}/season/${n}?api_key=${TMDB_KEY}&language=pt-BR`
+            )
+            return {
+              seasonNumber: n,
+              episodes: (s.episodes ?? []).map(ep => ({
+                number: ep.episode_number,
+                title: ep.name,
+                airDate: ep.air_date ?? null,
+                still: ep.still_path ? `${API.tmdbImg}/w300${ep.still_path}` : null,
+              }))
+            }
+          } catch { return { seasonNumber: n, episodes: [] } }
+        })
+      )
       return {
         cover: detail.poster_path ? `${API.tmdbImg}/w500${detail.poster_path as string}` : null,
         backdrop: detail.backdrop_path ? `${API.tmdbImg}/w1280${detail.backdrop_path as string}` : null,
@@ -287,6 +324,8 @@ export async function fetchDetail(
         cast: buildCast(credits),
         streamingServices,
         buyLinks: [],
+        tmdbId: seriesId,
+        tmdbSeasons,
       }
     }
 
@@ -329,6 +368,26 @@ export async function fetchDetail(
       const eq = encodeURIComponent(animeTitle)
       const provBR = providers.results?.BR ?? {}
       const { services: streamingServices } = buildStreaming(provBR, animeTitle)
+      const animeNumberOfSeasons = Math.min((detail.number_of_seasons as number) ?? 1, 5)
+      const animeSeasonNums = Array.from({ length: animeNumberOfSeasons }, (_, i) => i + 1)
+      const tmdbSeasons: TmdbSeason[] = await Promise.all(
+        animeSeasonNums.map(async (n) => {
+          try {
+            const s = await fetchJson<{ episodes: { episode_number: number; name: string; air_date: string | null; still_path: string | null }[] }>(
+              `${API.tmdbApi}/tv/${animeId}/season/${n}?api_key=${TMDB_KEY}&language=pt-BR`
+            )
+            return {
+              seasonNumber: n,
+              episodes: (s.episodes ?? []).map(ep => ({
+                number: ep.episode_number,
+                title: ep.name,
+                airDate: ep.air_date ?? null,
+                still: ep.still_path ? `${API.tmdbImg}/w300${ep.still_path}` : null,
+              }))
+            }
+          } catch { return { seasonNumber: n, episodes: [] } }
+        })
+      )
       return {
         cover: detail.poster_path ? `${API.tmdbImg}/w500${detail.poster_path as string}` : null,
         backdrop: detail.backdrop_path ? `${API.tmdbImg}/w1280${detail.backdrop_path as string}` : null,
@@ -342,6 +401,8 @@ export async function fetchDetail(
         cast: buildCast(credits),
         streamingServices,
         buyLinks: [{ label: 'MyAnimeList', url: `https://myanimelist.net/anime.php?q=${eq}` }],
+        tmdbId: animeId,
+        tmdbSeasons,
       }
     }
 
@@ -465,9 +526,10 @@ export async function fetchCatalogPage(
   if (!TMDB_KEY) return { items: [], totalPages: 0 }
   try {
     if (category === 'movies') {
-      const endpoint = listType === 'trending'
+      const tmdbMovieType = listType === 'new_releases' ? 'now_playing' : listType
+      const endpoint = tmdbMovieType === 'trending'
         ? `${API.tmdbApi}/trending/movie/week?api_key=${TMDB_KEY}&language=pt-BR&page=${page}`
-        : `${API.tmdbApi}/movie/${listType}?api_key=${TMDB_KEY}&language=pt-BR&page=${page}`
+        : `${API.tmdbApi}/movie/${tmdbMovieType}?api_key=${TMDB_KEY}&language=pt-BR&page=${page}`
       const data = await fetchJson<{ results: Record<string, unknown>[]; total_pages: number }>(endpoint)
       return {
         items: (data.results ?? []).map((m) => ({
@@ -485,9 +547,10 @@ export async function fetchCatalogPage(
       }
     }
     if (category === 'series') {
-      const endpoint = listType === 'trending'
+      const tmdbTvType = listType === 'new_releases' ? 'on_the_air' : listType
+      const endpoint = tmdbTvType === 'trending'
         ? `${API.tmdbApi}/trending/tv/week?api_key=${TMDB_KEY}&language=pt-BR&page=${page}`
-        : `${API.tmdbApi}/tv/${listType}?api_key=${TMDB_KEY}&language=pt-BR&page=${page}`
+        : `${API.tmdbApi}/tv/${tmdbTvType}?api_key=${TMDB_KEY}&language=pt-BR&page=${page}`
       const data = await fetchJson<{ results: Record<string, unknown>[]; total_pages: number }>(endpoint)
       return {
         items: (data.results ?? []).map((s) => ({

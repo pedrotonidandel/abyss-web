@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Heart, Eye, ExternalLink, Smartphone, Star } from 'lucide-react'
+import { ArrowLeft, Heart, Eye, Star, Play, ExternalLink, MoreVertical, Clock } from 'lucide-react'
+import { TorrentPlayer } from '../components/ui/TorrentPlayer'
+import { WatchOptionsSheet } from '../components/ui/WatchOptionsSheet'
 import { useAppStore } from '../store/useAppStore'
 import { api } from '../api'
 import { fetchDetail } from '../utils/fetchApiData'
 import { contentKey } from '../utils/contentKey'
 import { Comments } from '../components/ui/Comments'
-import type { DownloadItem, Source } from '../types'
-import type { ApiDetail } from '../utils/fetchApiData'
+import type { DownloadItem, Source, SeriesSeason } from '../types'
+import type { ApiDetail, CastMember, TmdbSeason } from '../utils/fetchApiData'
 
 interface DetailPageProps {
   item: DownloadItem
@@ -15,10 +17,144 @@ interface DetailPageProps {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  movies: '#e5a00d',
-  series: '#00b4ff',
-  books: '#22c55e',
-  animes: '#a855f7',
+  movies:  '#e5a00d',
+  series:  '#00b4ff',
+  books:   '#22c55e',
+  animes:  '#a855f7',
+  games:   '#f97316',
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  movies:  'Filme',
+  series:  'Série',
+  books:   'Livro',
+  animes:  'Anime',
+  games:   'Jogo',
+}
+
+function formatRuntime(minutes: number): string {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return h > 0 ? `${h}h ${m}min` : `${m}min`
+}
+
+function SeriesEpisodesSection({
+  addonSeasons,
+  tmdbSeasons,
+  onStream,
+}: {
+  addonSeasons: SeriesSeason[]
+  tmdbSeasons: TmdbSeason[]
+  onStream: (uri: string) => void
+  onWatch: () => void
+}) {
+  const [selectedSeason, setSelectedSeason] = useState(0)
+
+  // Merge: prefer addon seasons (have magnets), fall back to TMDB for metadata
+  const seasons = addonSeasons.length > 0 ? addonSeasons : tmdbSeasons.map(ts => ({
+    season: ts.seasonNumber,
+    uri: '',
+    episodes: ts.episodes.map(ep => ({
+      title: `Ep ${ep.number} — ${ep.title}`,
+      uri: '',
+      uploadDate: ep.airDate ?? '',
+    }))
+  }))
+
+  // Match TMDB still images to addon episodes by index
+  const getTmdbEp = (seasonIdx: number, epIdx: number) => {
+    const ts = tmdbSeasons.find(s => s.seasonNumber === (seasons[seasonIdx]?.season ?? seasonIdx + 1))
+    return ts?.episodes[epIdx] ?? null
+  }
+
+  const currentSeason = seasons[selectedSeason]
+  if (!currentSeason) return null
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      {/* Season selector */}
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 14 }} className="no-scrollbar">
+        {seasons.map((s, i) => (
+          <button
+            key={i}
+            onClick={() => setSelectedSeason(i)}
+            style={{
+              flexShrink: 0, padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600,
+              background: selectedSeason === i ? 'var(--brand-yellow)' : 'var(--chip)',
+              color: selectedSeason === i ? '#0d111a' : 'var(--lv-muted)',
+              border: selectedSeason === i ? 'none' : '1px solid var(--divider)',
+              cursor: 'pointer',
+            }}
+          >
+            {s.season === 0 ? 'Especiais' : `Temporada ${s.season}`}
+          </button>
+        ))}
+      </div>
+
+      {/* Episode list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {currentSeason.episodes.map((ep, epIdx) => {
+          const tmdbEp = getTmdbEp(selectedSeason, epIdx)
+          const hasStream = ep.uri?.startsWith('magnet:')
+          const displayTitle = ep.title.replace(/^Ep \d+ — /, '')
+
+          return (
+            <div
+              key={epIdx}
+              style={{
+                display: 'flex', gap: 10, alignItems: 'center',
+                padding: '10px 12px', borderRadius: 12,
+                background: 'var(--panel)', border: '1px solid var(--divider)',
+              }}
+            >
+              {/* Thumbnail */}
+              <div style={{
+                width: 96, height: 54, borderRadius: 8, overflow: 'hidden', flexShrink: 0,
+                background: 'var(--panel-2)', border: '1px solid var(--divider)',
+              }}>
+                {tmdbEp?.still ? (
+                  <img src={tmdbEp.still} alt={displayTitle} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+                ) : (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>📺</div>
+                )}
+              </div>
+
+              {/* Info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 12, color: 'var(--lv-muted)', margin: '0 0 2px', fontWeight: 500 }}>
+                  Ep {epIdx + 1}
+                </p>
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--lv-text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {displayTitle}
+                </p>
+                {(tmdbEp?.airDate ?? ep.uploadDate) && (
+                  <p style={{ fontSize: 10, color: 'oklch(0.45 0.01 240)', margin: '2px 0 0' }}>
+                    {new Date(tmdbEp?.airDate ?? ep.uploadDate ?? '').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </p>
+                )}
+              </div>
+
+              {/* Play button */}
+              {hasStream && (
+                <button
+                  onClick={() => onStream(ep.uri!)}
+                  style={{
+                    width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                    background: 'oklch(0.85 0.17 90 / 0.12)',
+                    border: '1px solid oklch(0.85 0.17 90 / 0.30)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Play size={14} fill="var(--brand-yellow)" style={{ color: 'var(--brand-yellow)', marginLeft: 2 }} />
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 export function DetailPage({ item, source, onClose }: DetailPageProps) {
@@ -26,21 +162,27 @@ export function DetailPage({ item, source, onClose }: DetailPageProps) {
   const [detail, setDetail] = useState<ApiDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [ck, setCk] = useState<string | null>(null)
+  const [heroLoaded, setHeroLoaded] = useState(false)
+  const [streamUri, setStreamUri] = useState<string | null>(null)
+  const [watchOpen, setWatchOpen] = useState(false)
 
   const category = item.category ?? source.category
   const catColor = CATEGORY_COLORS[category] ?? '#888'
+  const catLabel = CATEGORY_LABELS[category] ?? category
 
-  const libEntry = library.find((l) =>
-    l.title === item.title && l.category === category
+  const libEntry = library.find(
+    (l) => l.title === item.title && l.category === category,
   )
 
   useEffect(() => {
+    setDetail(null)
+    setLoading(true)
+    setHeroLoaded(false)
     loadDetail()
     computeKey()
   }, [item.title, category])
 
   const loadDetail = async () => {
-    setLoading(true)
     try {
       const d = await fetchDetail(item.title, category, item.tmdbId)
       setDetail(d)
@@ -68,166 +210,374 @@ export function DetailPage({ item, source, onClose }: DetailPageProps) {
     catch { toggleWatchedInStore(libEntry.id) }
   }
 
-  const openInApp = () => {
-    const url = `abyss://detail?title=${encodeURIComponent(item.title)}&category=${encodeURIComponent(category)}`
-    window.location.href = url
-  }
+  const heroImage = detail?.backdrop ?? detail?.cover ?? item.coverUrl ?? null
+  const title     = detail?.title ?? item.title
+  const rating    = detail?.rating ?? null
+  const votes     = detail?.voteCount ?? null
+  const runtime   = detail?.runtime ?? null
+  const genres    = detail?.genres ?? []
+  const releaseYear = (() => {
+    const raw = detail?.releaseDate || item.uploadDate || ''
+    if (!raw || raw.trim() === '') return null
+    const y = String(raw).slice(0, 4)
+    return /^\d{4}$/.test(y) && parseInt(y) > 1900 ? y : null
+  })()
 
-  const cover = detail?.cover ?? item.coverUrl ?? null
-  const backdrop = detail?.backdrop ?? null
-  const title = detail?.title ?? item.title
+  // ── Sections ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full overflow-hidden" style={{ background: '#0d0d0d' }}>
-      {/* Scrollable content */}
+    <div className="flex flex-col h-full" style={{ background: 'var(--app-bg)' }}>
       <div className="flex-1 overflow-y-auto">
-        {/* Backdrop / cover hero */}
-        <div className="relative w-full" style={{ minHeight: 240 }}>
-          {(backdrop ?? cover) ? (
+
+        {/* ── Hero image ─────────────────────────────────────────────────── */}
+        <div style={{ position: 'relative', width: '100%', height: 300, background: 'var(--panel)', overflow: 'hidden' }}>
+          {heroImage && (
             <img
-              src={backdrop ?? cover!}
+              src={heroImage}
               alt={title}
-              className="w-full object-cover"
-              style={{ maxHeight: 280, minHeight: 240 }}
-              loading="eager"
+              onLoad={() => setHeroLoaded(true)}
+              style={{
+                width: '100%', height: '100%', objectFit: 'cover',
+                opacity: heroLoaded ? 1 : 0, transition: 'opacity 0.3s',
+              }}
             />
-          ) : (
-            <div className="w-full" style={{ height: 240, background: '#1a1a1a' }} />
           )}
-          {/* Gradient overlay */}
-          <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(13,13,13,0.4) 0%, rgba(13,13,13,0.9) 80%, #0d0d0d 100%)' }} />
+          {/* Dark gradient overlay — bottom fade into bg */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.10) 40%, rgba(17,23,32,0.85) 80%, var(--app-bg) 100%)',
+          }} />
+
           {/* Back button */}
           <button
-            className="absolute top-4 left-4 p-2 rounded-full"
-            style={{ background: 'rgba(0,0,0,0.6)' }}
             onClick={onClose}
+            style={{
+              position: 'absolute', top: 16, left: 16,
+              width: 36, height: 36, borderRadius: '50%',
+              background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+            }}
           >
-            <ArrowLeft size={20} style={{ color: '#e0e0e0' }} />
+            <ArrowLeft size={18} style={{ color: '#fff' }} />
+          </button>
+
+          {/* More button */}
+          <button
+            className="md:hidden"
+            style={{
+              position: 'absolute', top: 16, right: 16,
+              width: 36, height: 36, borderRadius: '50%',
+              background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <MoreVertical size={18} style={{ color: '#fff' }} />
+          </button>
+
+          {/* Play button — opens where-to-watch sheet */}
+          <button
+            onClick={() => setWatchOpen(true)}
+            style={{
+              position: 'absolute',
+              top: '50%', left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 56, height: 56, borderRadius: '50%',
+              background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+              border: '2px solid rgba(255,255,255,0.35)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <Play size={22} fill="white" style={{ color: 'white', marginLeft: 3 }} />
           </button>
         </div>
 
-        {/* Info section */}
-        <div className="px-4 -mt-10 pb-8 flex flex-col gap-4">
-          {/* Cover + title row */}
-          <div className="flex gap-3">
-            {cover && (
-              <div className="shrink-0 w-24 rounded-xl overflow-hidden shadow-lg" style={{ border: '1px solid #1e1e1e' }}>
-                <img src={cover} alt={title} className="w-full h-36 object-cover" />
-              </div>
-            )}
-            <div className="flex-1 flex flex-col justify-end gap-1">
-              <span className="text-xs px-2 py-0.5 rounded-full self-start"
-                style={{ background: catColor + '20', color: catColor }}>
-                {category}
-              </span>
-              <h1 className="text-lg font-bold leading-tight" style={{ color: '#e0e0e0' }}>{title}</h1>
-              {detail?.releaseDate && (
-                <p className="text-xs" style={{ color: '#555' }}>{detail.releaseDate.slice(0, 4)}</p>
+        {/* ── Content below hero ──────────────────────────────────────────── */}
+        <div style={{ padding: '0 16px 24px' }}>
+
+          {/* Date + title */}
+          {releaseYear && (
+            <p style={{ fontSize: 12, color: 'var(--lv-muted)', marginBottom: 4, marginTop: -8 }}>
+              {releaseYear}
+            </p>
+          )}
+          <h1 style={{
+            fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px',
+            color: 'var(--lv-text)', margin: '0 0 12px', lineHeight: 1.2,
+          }}>
+            {title}
+          </h1>
+
+          {/* Tags row */}
+          {(runtime || genres.length > 0 || catLabel) && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              {runtime && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  fontSize: 12, fontWeight: 500,
+                  padding: '4px 10px', borderRadius: 20,
+                  background: 'var(--chip)', color: 'var(--lv-muted)',
+                  border: '1px solid var(--divider)',
+                }}>
+                  <Clock size={11} /> {formatRuntime(runtime)}
+                </span>
               )}
-              {detail?.rating && (
-                <div className="flex items-center gap-1">
-                  <Star size={12} fill="#f59e0b" style={{ color: '#f59e0b' }} />
-                  <span className="text-xs" style={{ color: '#f59e0b' }}>{detail.rating.toFixed(1)}</span>
+              {genres.slice(0, 2).map(g => (
+                <span key={g} style={{
+                  fontSize: 12, fontWeight: 500,
+                  padding: '4px 10px', borderRadius: 20,
+                  background: 'var(--chip)', color: 'var(--lv-muted)',
+                  border: '1px solid var(--divider)',
+                }}>
+                  {g}
+                </span>
+              ))}
+              <span style={{
+                fontSize: 12, fontWeight: 600,
+                padding: '4px 10px', borderRadius: 20,
+                background: catColor + '18', color: catColor,
+                border: `1px solid ${catColor}30`,
+              }}>
+                {catLabel}
+              </span>
+            </div>
+          )}
+
+          {/* Rating row */}
+          {rating != null && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Star size={16} fill="#f59e0b" style={{ color: '#f59e0b' }} />
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#f59e0b' }}>
+                  {rating.toFixed(1)}
+                </span>
+                <span style={{ fontSize: 13, color: 'var(--lv-muted)' }}>/10</span>
+                {votes != null && (
+                  <span style={{ fontSize: 12, color: 'var(--lv-muted)', marginLeft: 4 }}>
+                    {votes >= 1000 ? `${(votes / 1000).toFixed(0)}K votos` : `${votes} votos`}
+                  </span>
+                )}
+              </div>
+              {libEntry && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Heart size={14} fill={libEntry.liked ? '#ff4466' : 'none'}
+                    style={{ color: libEntry.liked ? '#ff4466' : 'var(--lv-muted)' }} />
+                  <span style={{ fontSize: 12, color: 'var(--lv-muted)' }}>
+                    {libEntry.liked ? 'Curtido' : 'Curtir'}
+                  </span>
                 </div>
               )}
             </div>
-          </div>
+          )}
 
           {/* Action buttons */}
-          <div className="flex gap-2">
+          <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
+            {(item.uris?.[0]?.startsWith('magnet:') || item.seasons?.some(s => s.uri?.startsWith('magnet:'))) && (
+              <button
+                onClick={() => {
+                  const uri = item.uris?.[0] ?? item.seasons?.find(s => s.uri?.startsWith('magnet:'))?.uri ?? ''
+                  setStreamUri(uri)
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  padding: '12px 16px', borderRadius: 12,
+                  background: 'oklch(0.85 0.17 90 / 0.10)',
+                  color: 'var(--brand-yellow)',
+                  border: '1px solid oklch(0.85 0.17 90 / 0.30)',
+                  fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                <Play size={15} fill="currentColor" /> Reproduzir
+              </button>
+            )}
             <button
-              className="flex items-center gap-2 flex-1 justify-center py-2.5 rounded-xl text-sm font-medium"
-              style={{ background: '#00b4ff', color: '#000' }}
-              onClick={openInApp}
+              onClick={() => setWatchOpen(true)}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                padding: '12px 0', borderRadius: 12,
+                background: 'var(--brand-yellow)', color: '#0d111a',
+                fontWeight: 700, fontSize: 14, border: 'none', cursor: 'pointer',
+              }}
             >
-              <Smartphone size={16} /> Abrir no app
+              <Play size={16} fill="#0d111a" style={{ color: '#0d111a' }} /> Onde assistir
             </button>
             {libEntry && (
               <>
                 <button
-                  className="p-2.5 rounded-xl"
-                  style={{ background: libEntry.liked ? '#ff446620' : '#111111', border: '1px solid #1e1e1e' }}
                   onClick={handleLike}
+                  style={{
+                    width: 48, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderRadius: 12, border: '1px solid var(--divider)', cursor: 'pointer',
+                    background: libEntry.liked ? '#ff446618' : 'var(--chip)',
+                  }}
                 >
                   <Heart size={20} fill={libEntry.liked ? '#ff4466' : 'none'}
-                    style={{ color: libEntry.liked ? '#ff4466' : '#555' }} />
+                    style={{ color: libEntry.liked ? '#ff4466' : 'var(--lv-muted)' }} />
                 </button>
                 <button
-                  className="p-2.5 rounded-xl"
-                  style={{ background: libEntry.watched ? '#22c55e20' : '#111111', border: '1px solid #1e1e1e' }}
                   onClick={handleWatched}
+                  style={{
+                    width: 48, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderRadius: 12, border: '1px solid var(--divider)', cursor: 'pointer',
+                    background: libEntry.watched ? '#22c55e18' : 'var(--chip)',
+                  }}
                 >
-                  <Eye size={20} style={{ color: libEntry.watched ? '#22c55e' : '#555' }} />
+                  <Eye size={20} style={{ color: libEntry.watched ? '#22c55e' : 'var(--lv-muted)' }} />
                 </button>
               </>
             )}
           </div>
 
-          {/* Description */}
-          {detail?.description && (
-            <div className="p-3 rounded-xl" style={{ background: '#111111', border: '1px solid #1e1e1e' }}>
-              <p className="text-sm leading-relaxed" style={{ color: '#ccc' }}>{detail.description}</p>
-            </div>
-          )}
-
-          {/* Genres */}
-          {detail?.genres && detail.genres.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {detail.genres.map((g) => (
-                <span key={g} className="text-xs px-2.5 py-1 rounded-full"
-                  style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#888' }}>
-                  {g}
+          {/* ── Cast ──────────────────────────────────────────────────────── */}
+          {detail?.cast && detail.cast.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--lv-text)', margin: 0 }}>Elenco</h3>
+                <span style={{ fontSize: 13, color: 'var(--lv-muted)' }}>
+                  {detail.cast.length} atores
                 </span>
-              ))}
+              </div>
+              <div className="no-scrollbar" style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
+                {(detail.cast as CastMember[]).map((c) => (
+                  <div key={c.name} style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0, width: 82 }}>
+                    {/* Large square photo */}
+                    <div style={{
+                      width: 82, height: 82, borderRadius: 14, overflow: 'hidden',
+                      background: 'var(--panel-2)', border: '1px solid var(--divider)',
+                    }}>
+                      {c.photo ? (
+                        <img src={c.photo} alt={c.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>👤</div>
+                      )}
+                    </div>
+                    <p style={{ fontSize: 11, color: 'var(--lv-muted)', textAlign: 'center', lineHeight: 1.3, margin: 0,
+                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {c.name}
+                    </p>
+                    {c.character && (
+                      <p style={{ fontSize: 10, color: 'oklch(0.45 0.01 240)', textAlign: 'center', margin: '-4px 0 0', lineHeight: 1.2,
+                        display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {c.character}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Developer / director */}
-          {detail?.developer && (
-            <p className="text-xs" style={{ color: '#555' }}>
-              Direção / Criação: <span style={{ color: '#888' }}>{detail.developer}</span>
-            </p>
+          {/* ── Synopsis ──────────────────────────────────────────────────── */}
+          {detail?.description && (
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--lv-text)', margin: '0 0 10px' }}>Sinopse</h3>
+              <p style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--lv-muted)', margin: 0 }}>
+                {detail.description}
+              </p>
+            </div>
           )}
 
-          {/* Streaming services */}
+          {loading && !detail && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div className="skeleton" style={{ height: 18, width: '40%' }} />
+              <div className="skeleton" style={{ height: 28, width: '80%' }} />
+              <div className="skeleton" style={{ height: 14, width: '60%' }} />
+              <div className="skeleton" style={{ height: 100, width: '100%' }} />
+            </div>
+          )}
+
+          {/* ── Genres (all) ─────────────────────────────────────────────── */}
+          {genres.length > 2 && (
+            <div style={{ marginBottom: 20 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--lv-text)', margin: '0 0 8px' }}>Gêneros</h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {genres.map(g => (
+                  <span key={g} style={{
+                    fontSize: 12, padding: '4px 10px', borderRadius: 20,
+                    background: 'var(--chip)', color: 'var(--lv-muted)',
+                    border: '1px solid var(--divider)',
+                  }}>
+                    {g}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Director / Author ─────────────────────────────────────────── */}
+          {detail?.developer && (
+            <div style={{ marginBottom: 20 }}>
+              <p style={{ fontSize: 13, color: 'var(--lv-muted)', margin: 0 }}>
+                {category === 'books' ? 'Autor' : category === 'games' ? 'Desenvolvedora' : 'Direção / Criação'}
+                {': '}
+                <span style={{ color: 'var(--lv-text)', fontWeight: 600 }}>{detail.developer}</span>
+              </p>
+            </div>
+          )}
+
+          {/* ── Where to watch ────────────────────────────────────────────── */}
           {detail?.streamingServices && detail.streamingServices.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h4 className="text-xs font-semibold" style={{ color: '#888' }}>Onde assistir</h4>
-              <div className="flex flex-wrap gap-2">
-                {detail.streamingServices.map((s) => (
+            <div style={{ marginBottom: 20 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--lv-text)', margin: '0 0 10px' }}>Onde assistir</h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {detail.streamingServices.map(s => (
                   <a key={s.name} href={s.url ?? '#'} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl"
-                    style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
-                    {s.logo && <img src={s.logo} alt={s.name} className="w-5 h-5 rounded" />}
-                    <span className="text-xs" style={{ color: '#ccc' }}>{s.name}</span>
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '8px 12px', borderRadius: 12,
+                      background: 'var(--panel)', border: '1px solid var(--divider)',
+                      textDecoration: 'none',
+                    }}>
+                    {s.logo && <img src={s.logo} alt={s.name} style={{ width: 20, height: 20, borderRadius: 4 }} />}
+                    <span style={{ fontSize: 13, color: 'var(--lv-text)' }}>{s.name}</span>
                   </a>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Trailer */}
+          {/* ── Trailer ──────────────────────────────────────────────────── */}
           {detail?.trailerUrl && (
-            <div className="flex flex-col gap-2">
-              <h4 className="text-xs font-semibold" style={{ color: '#888' }}>Trailer</h4>
+            <div style={{ marginBottom: 20 }}>
               <a href={detail.trailerUrl} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-2 p-3 rounded-xl"
-                style={{ background: '#111111', border: '1px solid #1e1e1e' }}>
-                <ExternalLink size={16} style={{ color: '#00b4ff' }} />
-                <span className="text-sm" style={{ color: '#00b4ff' }}>Abrir trailer no YouTube</span>
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '12px 14px', borderRadius: 12, textDecoration: 'none',
+                  background: 'var(--panel)', border: '1px solid var(--divider)',
+                }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%',
+                  background: 'oklch(0.85 0.17 90 / 0.12)', border: '1px solid oklch(0.85 0.17 90 / 0.3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <Play size={14} fill="var(--brand-yellow)" style={{ color: 'var(--brand-yellow)', marginLeft: 2 }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--lv-text)', margin: 0 }}>Assistir trailer</p>
+                  <p style={{ fontSize: 11, color: 'var(--lv-muted)', margin: 0 }}>Abre no YouTube</p>
+                </div>
+                <ExternalLink size={14} style={{ color: 'var(--lv-muted)', marginLeft: 'auto' }} />
               </a>
             </div>
           )}
 
-          {/* Buy links */}
+          {/* ── Buy links ─────────────────────────────────────────────────── */}
           {detail?.buyLinks && detail.buyLinks.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h4 className="text-xs font-semibold" style={{ color: '#888' }}>Links</h4>
-              <div className="flex flex-wrap gap-2">
-                {detail.buyLinks.map((l) => (
+            <div style={{ marginBottom: 20 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--lv-text)', margin: '0 0 10px' }}>Links</h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {detail.buyLinks.map(l => (
                   <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs"
-                    style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#ccc' }}>
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '6px 12px', borderRadius: 10, textDecoration: 'none', fontSize: 13,
+                      background: 'var(--chip)', border: '1px solid var(--divider)', color: 'var(--lv-text)',
+                    }}>
                     <ExternalLink size={12} /> {l.label}
                   </a>
                 ))}
@@ -235,59 +585,43 @@ export function DetailPage({ item, source, onClose }: DetailPageProps) {
             </div>
           )}
 
-          {/* Cast */}
-          {detail?.cast && detail.cast.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h4 className="text-xs font-semibold" style={{ color: '#888' }}>Elenco</h4>
-              <div className="flex gap-3 overflow-x-auto pb-1">
-                {detail.cast.map((c) => (
-                  <div key={c.name} className="flex flex-col items-center gap-1 shrink-0 w-16">
-                    <div className="w-12 h-12 rounded-full overflow-hidden"
-                      style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
-                      {c.photo ? (
-                        <img src={c.photo} alt={c.name} className="w-full h-full object-cover" loading="lazy" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-lg">👤</div>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-center leading-tight line-clamp-2" style={{ color: '#888' }}>{c.name}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* ── Seasons & Episodes ──────────────────────────────────────────────── */}
+          {(item.seasons?.length || detail?.tmdbSeasons?.length) ? (
+            <SeriesEpisodesSection
+              addonSeasons={item.seasons ?? []}
+              tmdbSeasons={detail?.tmdbSeasons ?? []}
+              onStream={(uri) => setStreamUri(uri)}
+              onWatch={() => setWatchOpen(true)}
+            />
+          ) : null}
 
-          {/* Seasons (series) */}
-          {item.seasons && item.seasons.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h4 className="text-xs font-semibold" style={{ color: '#888' }}>Temporadas</h4>
-              {item.seasons.map((season) => (
-                <div key={season.season} className="p-3 rounded-xl" style={{ background: '#111111', border: '1px solid #1e1e1e' }}>
-                  <p className="text-sm font-medium mb-2" style={{ color: '#e0e0e0' }}>Temporada {season.season}</p>
-                  <div className="flex flex-col gap-1">
-                    {season.episodes.map((ep, i) => (
-                      <p key={i} className="text-xs" style={{ color: '#888' }}>
-                        E{i + 1} — {ep.title}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {loading && !detail && (
-            <p className="text-xs text-center" style={{ color: '#555' }}>Buscando detalhes…</p>
-          )}
-
-          {/* Comments */}
+          {/* ── Comments ─────────────────────────────────────────────────── */}
           {ck && user && (
-            <div className="mt-2">
+            <div style={{ marginTop: 8 }}>
               <Comments contentKey={ck} currentUserId={user.id} />
             </div>
           )}
         </div>
       </div>
+
+      {streamUri && (
+        <TorrentPlayer
+          magnetUri={streamUri}
+          title={title}
+          onClose={() => setStreamUri(null)}
+        />
+      )}
+
+      {watchOpen && (
+        <WatchOptionsSheet
+          title={title}
+          streamingServices={detail?.streamingServices ?? []}
+          trailerUrl={detail?.trailerUrl ?? null}
+          magnetUri={item.uris?.[0] ?? item.seasons?.[0]?.uri ?? null}
+          onStream={(uri) => { setStreamUri(uri); setWatchOpen(false) }}
+          onClose={() => setWatchOpen(false)}
+        />
+      )}
     </div>
   )
 }

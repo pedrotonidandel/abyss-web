@@ -19,9 +19,9 @@ function UserAvatar({ name, avatarUrl, size = 28 }: { name: string; avatarUrl: s
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%', flexShrink: 0,
-      background: '#1a1a1a', border: '1px solid #2a2a2a',
+      background: 'oklch(0.85 0.17 90 / 0.15)', border: '1px solid var(--divider)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.4, fontWeight: 700, color: '#00b4ff',
+      fontSize: size * 0.4, fontWeight: 700, color: 'var(--brand-yellow)',
     }}>
       {name.charAt(0).toUpperCase()}
     </div>
@@ -101,20 +101,25 @@ function SuggestionDetail({
   const authorName = suggestion.displayName ?? suggestion.username
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden" style={{ background: 'var(--app-bg)' }}>
       {/* Header */}
-      <div className="shrink-0 px-4 pt-4 pb-3 flex items-center gap-3" style={{ borderBottom: '1px solid #1a1a1a' }}>
-        <button onClick={onBack} style={{ color: '#555' }}>
-          <ArrowLeft size={20} />
+      <div className="shrink-0 px-4 pt-4 pb-3 flex items-center gap-3"
+        style={{ background: 'var(--panel)', borderBottom: '1px solid var(--divider)' }}>
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs"
+          style={{ background: 'var(--chip)', border: '1px solid var(--divider)', color: 'var(--lv-muted)' }}
+        >
+          <ArrowLeft size={14} />
         </button>
-        <h2 className="text-base font-bold flex-1 truncate" style={{ color: '#e0e0e0' }}>
+        <h2 className="text-base font-bold flex-1 truncate" style={{ color: 'var(--lv-text)' }}>
           {suggestion.title}
         </h2>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-4">
         {/* Suggestion body */}
-        <div className="py-4" style={{ borderBottom: '1px solid #1a1a1a' }}>
+        <div className="py-4 mt-3 p-4 rounded-2xl" style={{ background: 'var(--panel)', border: '1px solid var(--divider)' }}>
           <div className="flex items-center gap-2 mb-3">
             <button onClick={() => openProfile(suggestion.userId)} className="shrink-0">
               <UserAvatar name={authorName} avatarUrl={suggestion.avatarUrl} size={32} />
@@ -122,19 +127,19 @@ function SuggestionDetail({
             <div>
               <button
                 className="text-sm font-semibold hover:underline"
-                style={{ color: '#00b4ff' }}
+                style={{ color: 'var(--brand-yellow)' }}
                 onClick={() => openProfile(suggestion.userId)}
               >
                 {authorName}
               </button>
-              <p className="text-[10px]" style={{ color: '#555' }}>{formatDate(suggestion.createdAt)}</p>
+              <p className="text-[10px]" style={{ color: 'var(--lv-muted)' }}>{formatDate(suggestion.createdAt)}</p>
             </div>
           </div>
-          <p className="text-sm leading-relaxed" style={{ color: '#ccc' }}>{suggestion.description}</p>
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--lv-text)' }}>{suggestion.description}</p>
         </div>
 
         {/* Reactions */}
-        <div className="flex flex-wrap gap-2 py-3" style={{ borderBottom: '1px solid #1a1a1a' }}>
+        <div className="flex flex-wrap gap-2 py-3" style={{ borderBottom: '1px solid var(--divider)' }}>
           {EMOJI_OPTIONS.map((emoji) => {
             const group = reactions.find((r) => r.emoji === emoji)
             const reacted = group?.userIds.includes(currentUserId)
@@ -144,13 +149,13 @@ function SuggestionDetail({
                 onClick={() => handleReaction(emoji)}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-full text-sm"
                 style={{
-                  background: reacted ? '#00b4ff20' : '#1a1a1a',
-                  border: `1px solid ${reacted ? '#00b4ff' : '#2a2a2a'}`,
+                  background: reacted ? 'oklch(0.85 0.17 90 / 0.12)' : 'var(--chip)',
+                  border: `1px solid ${reacted ? 'var(--brand-yellow)' : 'var(--divider)'}`,
                 }}
               >
                 <span>{emoji}</span>
                 {group && group.count > 0 && (
-                  <span className="text-xs" style={{ color: reacted ? '#00b4ff' : '#888' }}>{group.count}</span>
+                  <span className="text-xs" style={{ color: reacted ? 'var(--brand-yellow)' : 'var(--lv-muted)' }}>{group.count}</span>
                 )}
               </button>
             )
@@ -160,11 +165,11 @@ function SuggestionDetail({
         {/* Comments */}
         <div className="flex flex-col gap-3 pt-3">
           <div className="flex items-center gap-2">
-            <MessageSquare size={14} style={{ color: '#555' }} />
-            <span className="text-xs" style={{ color: '#888' }}>{comments.length} comentários</span>
+            <MessageSquare size={14} style={{ color: 'var(--lv-muted)' }} />
+            <span className="text-xs" style={{ color: 'var(--lv-muted)' }}>{comments.length} comentários</span>
           </div>
 
-          {loading && <p className="text-xs" style={{ color: '#555' }}>Carregando…</p>}
+          {loading && <p className="text-xs" style={{ color: 'var(--lv-muted)' }}>Carregando…</p>}
 
           {comments.map((c) => {
             const name = c.displayName ?? c.username
@@ -173,21 +178,21 @@ function SuggestionDetail({
                 <button onClick={() => openProfile(c.userId)} className="shrink-0 mt-0.5">
                   <UserAvatar name={name} avatarUrl={c.avatarUrl} size={26} />
                 </button>
-                <div className="flex-1 p-2.5 rounded-xl" style={{ background: '#111' }}>
+                <div className="flex-1 p-2.5 rounded-xl" style={{ background: 'var(--panel-2)' }}>
                   <div className="flex items-center gap-2 mb-1">
                     <button
                       className="text-xs font-semibold hover:underline"
-                      style={{ color: '#00b4ff' }}
+                      style={{ color: 'var(--brand-yellow)' }}
                       onClick={() => openProfile(c.userId)}
                     >
                       {name}
                     </button>
-                    <span className="text-[10px]" style={{ color: '#444' }}>{formatDate(c.createdAt)}</span>
+                    <span className="text-[10px]" style={{ color: 'var(--lv-muted)' }}>{formatDate(c.createdAt)}</span>
                   </div>
-                  <p className="text-xs" style={{ color: '#ccc' }}>{c.content}</p>
+                  <p className="text-xs" style={{ color: 'var(--lv-text)' }}>{c.content}</p>
                 </div>
                 {c.userId === currentUserId && (
-                  <button className="mt-1" style={{ color: '#444' }} onClick={() => handleDeleteComment(c.id)}>
+                  <button className="mt-1" style={{ color: 'var(--lv-muted)' }} onClick={() => handleDeleteComment(c.id)}>
                     <Trash2 size={13} />
                   </button>
                 )}
@@ -202,13 +207,13 @@ function SuggestionDetail({
               onChange={(e) => setNewComment(e.target.value)}
               placeholder="Escrever comentário…"
               className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
-              style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#e0e0e0' }}
+              style={{ background: 'var(--chip)', border: '1px solid var(--divider)', color: 'var(--lv-text)' }}
             />
             <button
               type="submit"
               disabled={submitting || !newComment.trim()}
               className="p-2 rounded-xl disabled:opacity-40"
-              style={{ background: '#00b4ff', color: '#000' }}
+              style={{ background: 'var(--brand-yellow)', color: '#0d111a' }}
             >
               <Send size={16} />
             </button>
@@ -243,18 +248,20 @@ function NewSuggestionForm({ onCreated, onCancel }: { onCreated: (s: Suggestion)
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="shrink-0 px-4 pt-4 pb-3 flex items-center gap-3" style={{ borderBottom: '1px solid #1a1a1a' }}>
-        <button onClick={onCancel} style={{ color: '#555' }}>
+    <div className="flex flex-col h-full overflow-hidden" style={{ background: 'var(--app-bg)' }}>
+      <div className="shrink-0 px-4 pt-4 pb-3 flex items-center gap-3"
+        style={{ background: 'var(--panel)', borderBottom: '1px solid var(--divider)' }}>
+        <button onClick={onCancel} style={{ color: 'var(--lv-muted)' }}>
           <ArrowLeft size={20} />
         </button>
-        <h2 className="text-base font-bold" style={{ color: '#e0e0e0' }}>Nova sugestão</h2>
+        <h2 className="text-base font-bold" style={{ color: 'var(--lv-text)' }}>Nova sugestão</h2>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-4 rounded-2xl"
+          style={{ background: 'var(--panel)', border: '1px solid var(--divider)' }}>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium" style={{ color: '#888' }}>Título</label>
+            <label className="text-xs font-medium" style={{ color: 'var(--lv-muted)' }}>Título</label>
             <input
               type="text"
               value={title}
@@ -262,32 +269,42 @@ function NewSuggestionForm({ onCreated, onCancel }: { onCreated: (s: Suggestion)
               placeholder="Resumo da sua ideia…"
               maxLength={255}
               className="rounded-xl px-3 py-2.5 text-sm outline-none"
-              style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#e0e0e0' }}
+              style={{ background: 'var(--chip)', border: '1px solid var(--divider)', color: 'var(--lv-text)' }}
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium" style={{ color: '#888' }}>Descrição</label>
+            <label className="text-xs font-medium" style={{ color: 'var(--lv-muted)' }}>Descrição</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Descreva sua sugestão com mais detalhes…"
               rows={6}
               className="rounded-xl px-3 py-2.5 text-sm outline-none resize-none"
-              style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#e0e0e0' }}
+              style={{ background: 'var(--chip)', border: '1px solid var(--divider)', color: 'var(--lv-text)' }}
             />
           </div>
 
-          {error && <p className="text-xs" style={{ color: '#ff4444' }}>{error}</p>}
+          {error && <p className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
 
-          <button
-            type="submit"
-            disabled={submitting || !title.trim() || !description.trim()}
-            className="py-3 rounded-xl text-sm font-semibold disabled:opacity-40"
-            style={{ background: '#00b4ff', color: '#000' }}
-          >
-            {submitting ? 'Enviando…' : 'Publicar sugestão'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="flex-1 py-3 rounded-xl text-sm font-medium"
+              style={{ background: 'var(--chip)', color: 'var(--lv-muted)' }}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || !title.trim() || !description.trim()}
+              className="flex-1 py-3 rounded-xl text-sm font-bold disabled:opacity-40"
+              style={{ background: 'var(--brand-yellow)', color: '#0d111a' }}
+            >
+              {submitting ? 'Enviando…' : 'Publicar sugestão'}
+            </button>
+          </div>
         </form>
       </div>
     </div>
@@ -342,7 +359,7 @@ function SuggestionCard({
   return (
     <div
       className="p-4 rounded-2xl cursor-pointer"
-      style={{ background: '#111111', border: '1px solid #1e1e1e' }}
+      style={{ background: 'var(--panel)', border: '1px solid var(--divider)' }}
       onClick={onClick}
     >
       {/* Author */}
@@ -353,18 +370,18 @@ function SuggestionCard({
         <div className="flex-1 min-w-0">
           <button
             className="text-xs font-semibold hover:underline truncate"
-            style={{ color: '#00b4ff' }}
+            style={{ color: 'var(--brand-yellow)' }}
             onClick={(e) => { e.stopPropagation(); openProfile(suggestion.userId) }}
           >
             {authorName}
           </button>
-          <p className="text-[10px]" style={{ color: '#555' }}>{formatDate(suggestion.createdAt)}</p>
+          <p className="text-[10px]" style={{ color: 'var(--lv-muted)' }}>{formatDate(suggestion.createdAt)}</p>
         </div>
         {suggestion.userId === currentUserId && (
           <button
             onClick={(e) => { e.stopPropagation(); onDelete() }}
             className="shrink-0"
-            style={{ color: '#444' }}
+            style={{ color: 'var(--lv-muted)' }}
           >
             <Trash2 size={14} />
           </button>
@@ -372,8 +389,8 @@ function SuggestionCard({
       </div>
 
       {/* Content */}
-      <h3 className="text-sm font-semibold mb-1" style={{ color: '#e0e0e0' }}>{suggestion.title}</h3>
-      <p className="text-xs leading-relaxed line-clamp-2" style={{ color: '#888' }}>{suggestion.description}</p>
+      <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--lv-text)' }}>{suggestion.title}</h3>
+      <p className="text-xs leading-relaxed line-clamp-2" style={{ color: 'var(--lv-muted)' }}>{suggestion.description}</p>
 
       {/* Footer */}
       <div className="flex items-center gap-3 mt-3" onClick={(e) => e.stopPropagation()}>
@@ -381,7 +398,11 @@ function SuggestionCard({
         <div className="relative">
           <button
             className="flex items-center gap-1 text-xs px-2 py-1 rounded-full"
-            style={{ background: reacted ? '#00b4ff20' : '#1a1a1a', border: `1px solid ${reacted ? '#00b4ff' : '#2a2a2a'}`, color: reacted ? '#00b4ff' : '#555' }}
+            style={{
+              background: reacted ? 'oklch(0.85 0.17 90 / 0.12)' : 'var(--chip)',
+              border: `1px solid ${reacted ? 'var(--brand-yellow)' : 'var(--divider)'}`,
+              color: reacted ? 'var(--brand-yellow)' : 'var(--lv-muted)',
+            }}
             onClick={(e) => { e.stopPropagation(); setShowReactions((v) => !v) }}
           >
             <span>{reacted ?? '😊'}</span>
@@ -390,7 +411,7 @@ function SuggestionCard({
           </button>
           {showReactions && (
             <div className="absolute bottom-full left-0 mb-1 flex gap-1 p-1.5 rounded-xl z-10"
-              style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+              style={{ background: 'var(--panel-2)', border: '1px solid var(--divider)' }}>
               {EMOJI_OPTIONS.map((emoji) => (
                 <button key={emoji} className="text-base hover:scale-125 transition-transform"
                   onClick={(e) => handleReaction(e, emoji)}>
@@ -401,7 +422,8 @@ function SuggestionCard({
           )}
         </div>
 
-        <div className="flex items-center gap-1 text-xs" style={{ color: '#555' }}>
+        <div className="flex items-center gap-1 text-xs"
+          style={{ background: 'var(--chip)', borderRadius: 999, padding: '2px 8px', color: 'var(--lv-muted)' }}>
           <MessageSquare size={12} />
           <span>{suggestion.commentCount}</span>
         </div>
@@ -468,22 +490,24 @@ export function SuggestionsPage({ onBack }: SuggestionsPageProps) {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden" style={{ background: 'var(--app-bg)' }}>
       {/* Header */}
-      <div className="shrink-0 px-4 pt-4 pb-3 flex items-center justify-between" style={{ borderBottom: '1px solid #1a1a1a' }}>
+      <div className="shrink-0 px-4 pt-4 pb-3 flex items-center justify-between"
+        style={{ background: 'var(--panel)', borderBottom: '1px solid var(--divider)' }}>
         <div className="flex items-center gap-3">
-          <button onClick={onBack} style={{ color: '#555' }}>
+          <button onClick={onBack} style={{ color: 'var(--lv-muted)' }}>
             <ArrowLeft size={20} />
           </button>
-          <h2 className="text-base font-bold" style={{ color: '#e0e0e0' }}>Sugestões</h2>
-          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: '#00b4ff20', color: '#00b4ff' }}>
+          <h2 className="text-base font-bold" style={{ color: 'var(--lv-text)' }}>Sugestões</h2>
+          <span className="text-xs px-2 py-0.5 rounded-full"
+            style={{ background: 'var(--chip)', color: 'var(--lv-muted)' }}>
             {suggestions.length}
           </span>
         </div>
         <button
           onClick={() => setView('new')}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
-          style={{ background: '#00b4ff', color: '#000' }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold"
+          style={{ background: 'var(--brand-yellow)', color: '#0d111a' }}
         >
           <Plus size={14} />
           Nova
@@ -493,15 +517,15 @@ export function SuggestionsPage({ onBack }: SuggestionsPageProps) {
       <div className="flex-1 overflow-y-auto px-4 pb-4">
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <p className="text-sm" style={{ color: '#555' }}>Carregando…</p>
+            <p className="text-sm" style={{ color: 'var(--lv-muted)' }}>Carregando…</p>
           </div>
         ) : suggestions.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 gap-3">
-            <p className="text-sm" style={{ color: '#555' }}>Nenhuma sugestão ainda.</p>
+            <p className="text-sm" style={{ color: 'var(--lv-muted)' }}>Nenhuma sugestão ainda.</p>
             <button
               onClick={() => setView('new')}
               className="text-xs px-4 py-2 rounded-xl"
-              style={{ background: '#00b4ff20', color: '#00b4ff', border: '1px solid #00b4ff30' }}
+              style={{ background: 'var(--brand-yellow)', color: '#0d111a', fontWeight: 700 }}
             >
               Seja o primeiro a sugerir!
             </button>

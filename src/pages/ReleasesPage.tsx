@@ -19,9 +19,9 @@ function UserAvatar({ name, avatarUrl, size = 28 }: { name: string; avatarUrl: s
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%', flexShrink: 0,
-      background: '#1a1a1a', border: '1px solid #2a2a2a',
+      background: 'oklch(0.85 0.17 90 / 0.15)', border: '1px solid var(--divider)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.4, fontWeight: 700, color: '#00b4ff',
+      fontSize: size * 0.4, fontWeight: 700, color: 'var(--brand-yellow)',
     }}>
       {name.charAt(0).toUpperCase()}
     </div>
@@ -97,21 +97,21 @@ function ReleaseItem({ release, currentUserId }: ReleaseItemProps) {
     new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: '#111111', border: '1px solid #1e1e1e' }}>
+    <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--panel)', border: '1px solid var(--divider)' }}>
       {/* Header */}
       <button className="w-full flex items-start justify-between p-4 text-left" onClick={handleExpand}>
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <span className="text-xs font-mono px-2 py-0.5 rounded-md"
-              style={{ background: '#00b4ff20', color: '#00b4ff' }}>
+              style={{ background: 'oklch(0.85 0.17 90 / 0.10)', color: 'var(--brand-yellow)' }}>
               v{release.version}
             </span>
-            <span className="text-[10px]" style={{ color: '#555' }}>{formatDate(release.createdAt)}</span>
+            <span className="text-[10px]" style={{ color: 'var(--lv-muted)' }}>{formatDate(release.createdAt)}</span>
           </div>
-          <h3 className="text-sm font-semibold" style={{ color: '#e0e0e0' }}>{release.title}</h3>
-          <p className="text-xs" style={{ color: '#888' }}>por {release.createdByName}</p>
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--lv-text)' }}>{release.title}</h3>
+          <p className="text-xs" style={{ color: 'var(--lv-muted)' }}>por {release.createdByName}</p>
         </div>
-        <span style={{ color: '#555' }}>
+        <span style={{ color: 'var(--lv-muted)' }}>
           {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </span>
       </button>
@@ -119,7 +119,7 @@ function ReleaseItem({ release, currentUserId }: ReleaseItemProps) {
       {expanded && (
         <div className="px-4 pb-4 flex flex-col gap-4">
           {/* Changelog — tamanho estático, sem scroll */}
-          <div className="p-3 rounded-xl text-sm whitespace-pre-wrap" style={{ background: '#0f0f0f', color: '#ccc' }}>
+          <div className="p-3 rounded-xl text-sm whitespace-pre-wrap" style={{ background: 'var(--panel-2)', color: 'var(--lv-text)' }}>
             {release.changelog}
           </div>
 
@@ -134,13 +134,13 @@ function ReleaseItem({ release, currentUserId }: ReleaseItemProps) {
                   onClick={() => handleReaction(emoji)}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-full text-sm"
                   style={{
-                    background: reacted ? '#00b4ff20' : '#1a1a1a',
-                    border: `1px solid ${reacted ? '#00b4ff' : '#2a2a2a'}`,
+                    background: reacted ? 'oklch(0.85 0.17 90 / 0.12)' : 'var(--chip)',
+                    border: `1px solid ${reacted ? 'var(--brand-yellow)' : 'var(--divider)'}`,
                   }}
                 >
                   <span>{emoji}</span>
                   {group && group.count > 0 && (
-                    <span className="text-xs" style={{ color: reacted ? '#00b4ff' : '#888' }}>{group.count}</span>
+                    <span className="text-xs" style={{ color: reacted ? 'var(--brand-yellow)' : 'var(--lv-muted)' }}>{group.count}</span>
                   )}
                 </button>
               )
@@ -150,11 +150,11 @@ function ReleaseItem({ release, currentUserId }: ReleaseItemProps) {
           {/* Comments */}
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
-              <MessageSquare size={14} style={{ color: '#555' }} />
-              <span className="text-xs" style={{ color: '#888' }}>{comments.length} comentários</span>
+              <MessageSquare size={14} style={{ color: 'var(--lv-muted)' }} />
+              <span className="text-xs" style={{ color: 'var(--lv-muted)' }}>{comments.length} comentários</span>
             </div>
 
-            {loadingComments && <p className="text-xs" style={{ color: '#555' }}>Carregando…</p>}
+            {loadingComments && <p className="text-xs" style={{ color: 'var(--lv-muted)' }}>Carregando…</p>}
 
             {/* Lista com scroll */}
             <div className="flex flex-col gap-2" style={{ maxHeight: 260, overflowY: 'auto' }}>
@@ -165,23 +165,23 @@ function ReleaseItem({ release, currentUserId }: ReleaseItemProps) {
                     <button onClick={() => openProfile(c.userId)} className="shrink-0 mt-0.5">
                       <UserAvatar name={name} avatarUrl={c.avatarUrl} size={26} />
                     </button>
-                    <div className="flex-1 p-2.5 rounded-xl" style={{ background: '#0f0f0f' }}>
+                    <div className="flex-1 p-2.5 rounded-xl" style={{ background: 'var(--panel-2)' }}>
                       <div className="flex items-center gap-2 mb-1">
                         <button
                           className="text-xs font-semibold hover:underline"
-                          style={{ color: '#00b4ff' }}
+                          style={{ color: 'var(--brand-yellow)' }}
                           onClick={() => openProfile(c.userId)}
                         >
                           {name}
                         </button>
-                        <span className="text-[10px]" style={{ color: '#444' }}>
+                        <span className="text-[10px]" style={{ color: 'var(--lv-muted)' }}>
                           {formatDate(c.createdAt)}
                         </span>
                       </div>
-                      <p className="text-xs" style={{ color: '#ccc' }}>{c.content}</p>
+                      <p className="text-xs" style={{ color: 'var(--lv-text)' }}>{c.content}</p>
                     </div>
                     {c.userId === currentUserId && (
-                      <button className="mt-1 text-xs" style={{ color: '#444' }} onClick={() => handleDeleteComment(c.id)}>
+                      <button className="mt-1 text-xs" style={{ color: 'var(--lv-muted)' }} onClick={() => handleDeleteComment(c.id)}>
                         ×
                       </button>
                     )}
@@ -197,13 +197,13 @@ function ReleaseItem({ release, currentUserId }: ReleaseItemProps) {
                 onChange={(e) => setNewComment(e.target.value)}
                 placeholder="Adicionar comentário…"
                 className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
-                style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#e0e0e0' }}
+                style={{ background: 'var(--chip)', border: '1px solid var(--divider)', color: 'var(--lv-text)' }}
               />
               <button
                 type="submit"
                 disabled={submitting || !newComment.trim()}
                 className="p-2 rounded-xl disabled:opacity-40"
-                style={{ background: '#00b4ff', color: '#000' }}
+                style={{ background: 'var(--brand-yellow)', color: '#0d111a' }}
               >
                 <Send size={16} />
               </button>
@@ -230,18 +230,18 @@ export function ReleasesPage() {
   if (!user) return null
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden" style={{ background: 'var(--app-bg)' }}>
       <div className="shrink-0 px-4 pt-4 pb-2">
-        <h2 className="text-lg font-bold" style={{ color: '#e0e0e0' }}>Novidades</h2>
+        <h2 className="text-lg font-bold" style={{ color: 'var(--lv-text)' }}>Novidades</h2>
       </div>
       <div className="flex-1 overflow-y-auto px-4 pb-4">
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <p className="text-sm" style={{ color: '#555' }}>Carregando…</p>
+            <p className="text-sm" style={{ color: 'var(--lv-muted)' }}>Carregando…</p>
           </div>
         ) : releases.length === 0 ? (
           <div className="flex items-center justify-center h-32">
-            <p className="text-sm" style={{ color: '#555' }}>Nenhuma versão publicada ainda.</p>
+            <p className="text-sm" style={{ color: 'var(--lv-muted)' }}>Nenhuma versão publicada ainda.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-3 pt-3">

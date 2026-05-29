@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <!-- Main gradient: bright cyan top-left → royal blue → deep indigo bottom-right -->
+    <linearGradient id="g" gradientUnits="userSpaceOnUse" x1="16" y1="38" x2="184" y2="176">
+      <stop offset="0%"   stop-color="#00d8ff"/>
+      <stop offset="38%"  stop-color="#1e50f0"/>
+      <stop offset="100%" stop-color="#140855"/>
+    </linearGradient>
+
+    <!-- Subtle top-edge brightness (light source from above) -->
+    <linearGradient id="shine" gradientUnits="userSpaceOnUse" x1="100" y1="38" x2="100" y2="120">
+      <stop offset="0%"   stop-color="white" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Soft blue outer glow -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4.5" result="blur"/>
+      <feColorMatrix in="blur" type="matrix"
+        values="0 0 0 0 0
+                0 0 0 0 0.22
+                0 0 0 0 0.88
+                0 0 0 0.50 0" result="colored"/>
+      <feMerge>
+        <feMergeNode in="colored"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!--
+    Hollow inverted triangle ring
+    Outer: rounded corners — top r=8, tip r=5
+    Inner: sharp cutout (fill-rule evenodd subtracts it)
+
+    Outer path traced clockwise (rounded corners via quadratic bezier Q):
+      Start at P2 of top-left corner → line along top → round top-right
+      → line down-left → round bottom tip → line up-left → round top-left → Z
+
+    Inner triangle: clockwise, same centroid, ~45% scale factor
+  -->
+
+  <!-- Main ring shape -->
+  <path
+    fill-rule="evenodd"
+    fill="url(#g)"
+    filter="url(#glow)"
+    d="
+      M 24,38
+      L 176,38
+      Q 184,38 179.8,44.8
+      L 102.6,171.7
+      Q 100,176 97.4,171.7
+      L 20.2,44.8
+      Q 16,38 24,38
+      Z
+      M 62,63 L 138,63 L 100,126 Z
+    "
+  />
+
+  <!-- Subtle top highlight (light from above) -->
+  <path
+    fill-rule="evenodd"
+    fill="url(#shine)"
+    d="
+      M 24,38
+      L 176,38
+      Q 184,38 179.8,44.8
+      L 102.6,171.7
+      Q 100,176 97.4,171.7
+      L 20.2,44.8
+      Q 16,38 24,38
+      Z
+      M 62,63 L 138,63 L 100,126 Z
+    "
+  />
+</svg>

@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Search, SlidersHorizontal, X, Film, Tv, Sparkles, BookOpen, ChevronRight, Star } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Search, SlidersHorizontal, X, Film, Tv, Sparkles, Star, Bell, ChevronDown, UserCircle, Shield, LogOut } from 'lucide-react'
+import { useAppStore } from '../store/useAppStore'
 import { fetchCatalogPage, fetchCatalogSearch } from '../utils/fetchApiData'
 import type { CatalogItem, CatalogListType } from '../utils/fetchApiData'
 import type { ContentCategory, DownloadItem, Source } from '../types'
@@ -8,7 +9,6 @@ const CATEGORIES: { id: ContentCategory; label: string; icon: React.ComponentTyp
   { id: 'movies', label: 'Filmes',  icon: Film     },
   { id: 'series', label: 'Séries',  icon: Tv       },
   { id: 'animes', label: 'Animes',  icon: Sparkles },
-  { id: 'books',  label: 'Livros',  icon: BookOpen },
 ]
 
 const LIST_TYPES: { id: CatalogListType; label: string }[] = [
@@ -20,6 +20,15 @@ const LIST_TYPES: { id: CatalogListType; label: string }[] = [
 
 interface Props {
   onOpenDetail: (item: DownloadItem, source: Source) => void
+  externalQuery?: string
+  // Tablet header controls (bell + user dropdown embedded in search row)
+  avatarDataUrl?: string | null
+  unreadCount?: number
+  onNotifOpen?: () => void
+  onLogout?: () => void
+  onViewProfile?: () => void
+  headerProfileOpen?: boolean
+  onHeaderProfileToggle?: () => void
 }
 
 function toStub(item: CatalogItem): { item: DownloadItem; source: Source } {
@@ -44,7 +53,17 @@ function toStub(item: CatalogItem): { item: DownloadItem; source: Source } {
   }
 }
 
-export function BrowsePage({ onOpenDetail }: Props) {
+export function BrowsePage({
+  onOpenDetail,
+  avatarDataUrl,
+  unreadCount = 0,
+  onNotifOpen,
+  onLogout,
+  onViewProfile,
+  headerProfileOpen = false,
+  onHeaderProfileToggle,
+}: Props) {
+  const { user } = useAppStore()
   const [category, setCategory]       = useState<ContentCategory>('movies')
   const [listType, setListType]       = useState<CatalogListType>('popular')
   const [searchInput, setSearchInput] = useState('')
@@ -54,23 +73,27 @@ export function BrowsePage({ onOpenDetail }: Props) {
   const [totalPages, setTotalPages]   = useState(1)
   const [loading, setLoading]         = useState(false)
   const [filterOpen, setFilterOpen]   = useState(false)
-  const [selectedGenre, setSelectedGenre] = useState('Todos')
+  const filterBtnRef                  = useRef<HTMLDivElement>(null)
 
-  // Derive unique genres from loaded items
-  const genres = useMemo(() => {
-    const set = new Set<string>()
-    items.forEach((item) => item.genres.forEach((g) => set.add(g)))
-    return ['Todos', ...Array.from(set).slice(0, 12)]
-  }, [items])
+  // Independent banner items — always the 6 most recent across all categories
+  const [bannerItems, setBannerItems] = useState<CatalogItem[]>([])
+  const [bannerIdx, setBannerIdx]     = useState(0)
 
-  const visibleItems = useMemo(() => {
-    if (selectedGenre === 'Todos') return items
-    return items.filter((item) => item.genres.includes(selectedGenre))
-  }, [items, selectedGenre])
+  useEffect(() => {
+    // Fetch 6 new-release movies for the banner (independent of category filter)
+    fetchCatalogPage('movies', 1, 'new_releases')
+      .then(r => setBannerItems(r.items.slice(0, 6)))
+      .catch(() => {})
+  }, [])
 
-  const featured   = visibleItems[0] ?? null
-  const newItems   = visibleItems.slice(1, 7)
-  const gridItems  = visibleItems.slice(7)
+  // Auto-advance banner
+  useEffect(() => {
+    if (bannerItems.length <= 1) return
+    const t = setInterval(() => setBannerIdx(i => (i + 1) % bannerItems.length), 5000)
+    return () => clearInterval(t)
+  }, [bannerItems.length])
+
+  const bannerItem = bannerItems[bannerIdx] ?? null
 
   const load = useCallback(async (cat: ContentCategory, lt: CatalogListType, q: string, p: number) => {
     setLoading(true)
@@ -86,7 +109,6 @@ export function BrowsePage({ onOpenDetail }: Props) {
 
   useEffect(() => {
     setPage(1)
-    setSelectedGenre('Todos')
     load(category, listType, query, 1)
   }, [category, listType, query, load])
 
@@ -107,209 +129,336 @@ export function BrowsePage({ onOpenDetail }: Props) {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden" style={{ background: '#0d0d0d' }}>
+    <>
+      <style>{`
+        .browse-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+        }
+        @media (min-width: 768px) {
+          .browse-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        @media (min-width: 1024px) {
+          .browse-grid { grid-template-columns: repeat(5, 1fr); }
+        }
+      `}</style>
 
-      {/* ── Top bar ── */}
-      <div className="shrink-0 px-4 pt-4 pb-3" style={{ background: '#0d0d0d' }}>
+      <div className="flex flex-col h-full overflow-hidden" style={{ background: 'var(--app-bg)' }}>
 
-        {/* Search + filter */}
-        <form onSubmit={handleSearch} className="flex items-center gap-2">
-          <div
-            className="flex-1 flex items-center gap-2 rounded-xl px-3 py-2.5"
-            style={{ background: '#161616', border: '1px solid #1e1e1e' }}
+        {/* ── Search row: search bar + bell + user dropdown (bell/user only on md+) ── */}
+        <div
+          className="shrink-0 px-4 pt-3 pb-2 flex items-center gap-2"
+          style={{ borderBottom: '1px solid var(--divider)' }}
+        >
+          {/* Search bar — flex-1, slightly constrained */}
+          <form
+            onSubmit={handleSearch}
+            className="flex items-center gap-2 rounded-xl px-3"
+            style={{
+              flex: 1, height: 38, maxWidth: 460,
+              background: 'var(--panel-2)', border: '1px solid var(--divider)',
+            }}
           >
-            <Search size={15} style={{ color: '#444' }} />
+            <Search size={14} style={{ color: 'var(--lv-muted)', flexShrink: 0 }} />
             <input
               type="search"
-              placeholder="Filmes, séries, animes…"
+              placeholder="Buscar filmes, séries…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="flex-1 bg-transparent text-sm outline-none"
-              style={{ color: '#e0e0e0' }}
+              style={{ color: 'var(--lv-text)', minWidth: 0 }}
             />
             {searchInput && (
-              <button type="button" onClick={() => { setSearchInput(''); setQuery('') }}>
-                <X size={14} style={{ color: '#555' }} />
+              <button
+                type="button"
+                onClick={() => { setSearchInput(''); setQuery('') }}
+                style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+              >
+                <X size={13} style={{ color: 'var(--lv-muted)' }} />
               </button>
             )}
-          </div>
-          <button
-            type="button"
-            className="flex items-center justify-center rounded-xl shrink-0"
-            style={{
-              width: 42, height: 42,
-              background: filterOpen ? '#1e1e1e' : '#161616',
-              border: '1px solid #1e1e1e',
-              color: filterOpen ? '#fff' : '#555',
-            }}
-            onClick={() => setFilterOpen(true)}
-          >
-            <SlidersHorizontal size={17} />
-          </button>
-        </form>
+          </form>
 
-        {/* Category pills */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar mt-3 pb-0.5">
-          {CATEGORIES.map(({ id, label }) => (
+          {/* Bell — tablet/desktop only */}
+          <button
+            className="hidden md:flex items-center justify-center shrink-0"
+            onClick={onNotifOpen}
+            style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--lv-muted)', position: 'relative',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--lv-text)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--lv-muted)' }}
+          >
+            <Bell size={17} />
+            {unreadCount > 0 && (
+              <span style={{
+                position: 'absolute', top: 6, right: 6,
+                width: 7, height: 7, borderRadius: '50%',
+                background: 'var(--brand-yellow)',
+              }} />
+            )}
+          </button>
+
+          {/* User dropdown — tablet/desktop only */}
+          <div className="hidden md:block shrink-0" style={{ position: 'relative' }}>
             <button
-              key={id}
-              onClick={() => { setCategory(id); setQuery(''); setSearchInput('') }}
-              className="shrink-0 px-4 py-1.5 rounded-full text-sm font-semibold"
+              onClick={onHeaderProfileToggle}
               style={{
-                background: category === id ? '#ffffff' : '#181818',
-                color:      category === id ? '#000000' : '#666',
-                border:     category === id ? 'none'    : '1px solid #222',
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '5px 10px 5px 6px', borderRadius: 10,
+                border: '1px solid var(--divider)',
+                background: headerProfileOpen ? 'var(--panel-2)' : 'var(--panel)',
+                cursor: 'pointer', transition: 'background 0.15s',
               }}
             >
-              {label}
+              {avatarDataUrl ? (
+                <img src={avatarDataUrl} alt="" style={{ width: 26, height: 26, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+              ) : (
+                <div style={{
+                  width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+                  background: 'oklch(0.85 0.17 90 / 0.15)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 700, color: 'var(--brand-yellow)',
+                }}>
+                  {(user?.displayName ?? user?.username ?? '?').charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--lv-text)', whiteSpace: 'nowrap' }}>
+                {user?.displayName ?? user?.username}
+              </span>
+              <ChevronDown
+                size={12}
+                style={{
+                  color: 'var(--lv-muted)', flexShrink: 0,
+                  transform: headerProfileOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s',
+                }}
+              />
             </button>
-          ))}
+
+            {headerProfileOpen && (
+              <>
+                <div onClick={onHeaderProfileToggle} style={{ position: 'fixed', inset: 0, zIndex: 49 }} />
+                <div style={{
+                  position: 'absolute', right: 0, top: 'calc(100% + 4px)',
+                  zIndex: 50, background: 'var(--panel)',
+                  border: '1px solid var(--divider)', borderRadius: 12,
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                  overflow: 'hidden', minWidth: 160,
+                }}>
+                  <button
+                    onClick={() => { onHeaderProfileToggle?.(); onViewProfile?.() }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', color: 'var(--lv-text)', fontSize: 13 }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'oklch(1 0 0 / 0.05)' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+                  >
+                    <UserCircle size={15} style={{ color: 'var(--lv-muted)', flexShrink: 0 }} />
+                    Ver Perfil
+                  </button>
+                  {user?.isAdmin && (
+                    <button
+                      onClick={() => { onHeaderProfileToggle?.(); onViewProfile?.() }}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', color: 'var(--lv-text)', fontSize: 13 }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'oklch(1 0 0 / 0.05)' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+                    >
+                      <Shield size={15} style={{ color: 'var(--brand-yellow)', flexShrink: 0 }} />
+                      Painel Admin
+                    </button>
+                  )}
+                  <div style={{ height: 1, background: 'var(--divider)', margin: '2px 0' }} />
+                  <button
+                    onClick={() => { onHeaderProfileToggle?.(); onLogout?.() }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', color: '#ef4444', fontSize: 13, fontWeight: 600 }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.08)' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+                  >
+                    <LogOut size={15} style={{ color: '#ef4444', flexShrink: 0 }} />
+                    Sair
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Genre filter pills (when items loaded) */}
-        {!query && genres.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto no-scrollbar mt-2.5 pb-0.5">
-            {genres.map((g) => (
+        {/* ── Category pills + filter button ── */}
+        <div className="shrink-0 px-4 pt-2 pb-2 flex items-center gap-2">
+          {/* Category pills */}
+          <div className="flex-1 flex gap-2 overflow-x-auto no-scrollbar">
+            {CATEGORIES.map(({ id, label }) => (
               <button
-                key={g}
-                onClick={() => setSelectedGenre(g)}
-                className="shrink-0 px-3 py-1 rounded-full text-xs font-medium"
+                key={id}
+                onClick={() => { setCategory(id); setQuery(''); setSearchInput('') }}
+                className="shrink-0 px-4 py-1.5 rounded-full text-sm font-semibold"
                 style={{
-                  background: selectedGenre === g ? 'rgba(255,255,255,0.12)' : 'transparent',
-                  color:      selectedGenre === g ? '#fff' : '#555',
-                  border:     `1px solid ${selectedGenre === g ? 'rgba(255,255,255,0.2)' : '#222'}`,
+                  background: category === id ? 'var(--brand-yellow)' : 'var(--chip)',
+                  color:      category === id ? '#0d111a'              : 'var(--lv-muted)',
+                  border:     category === id ? 'none'                 : '1px solid var(--divider)',
                 }}
               >
-                {g}
+                {label}
               </button>
             ))}
           </div>
-        )}
-      </div>
 
-      {/* ── Content ── */}
-      <div className="flex-1 overflow-y-auto no-scrollbar">
-        {loading && items.length === 0 ? (
-          <div className="flex items-center justify-center h-40">
-            <p className="text-sm" style={{ color: '#555' }}>Carregando…</p>
+          {/* Filter button */}
+          <div ref={filterBtnRef} style={{ position: 'relative', flexShrink: 0 }}>
+            <button
+              type="button"
+              className="flex items-center justify-center rounded-xl shrink-0"
+              style={{
+                width: 36, height: 36,
+                background: filterOpen ? 'var(--panel-2)' : 'var(--chip)',
+                border: '1px solid var(--divider)',
+                color: filterOpen ? 'var(--lv-text)' : 'var(--lv-muted)',
+              }}
+              onClick={() => setFilterOpen(v => !v)}
+            >
+              <SlidersHorizontal size={16} />
+            </button>
+
+            {/* ── Filter popover / bottom-sheet ── */}
+            {filterOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40 md:bg-transparent"
+                  style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(1px)' }}
+                  onClick={() => setFilterOpen(false)}
+                />
+                <style>{`
+                  .filter-sheet {
+                    position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+                    display: flex; flex-direction: column;
+                    background: var(--panel); border: 1px solid var(--divider);
+                    border-radius: 20px 20px 0 0; max-height: 80vh;
+                  }
+                  @media (min-width: 768px) {
+                    .filter-sheet {
+                      position: absolute; bottom: auto; left: auto; right: 0; top: calc(100% + 4px);
+                      width: 280px; border-radius: 12px; max-height: 320px;
+                      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+                    }
+                  }
+                `}</style>
+                <div className="filter-sheet">
+                  <div className="flex justify-center pt-3 pb-1 md:hidden">
+                    <div className="rounded-full" style={{ width: 36, height: 4, background: 'oklch(0.35 0.012 235)' }} />
+                  </div>
+                  <div className="flex items-center justify-between px-5 pt-3 pb-3">
+                    <h3 className="text-base font-bold" style={{ color: 'var(--lv-text)' }}>Filtros</h3>
+                    <button onClick={() => setFilterOpen(false)} style={{ color: 'var(--lv-muted)' }}>
+                      <X size={18} />
+                    </button>
+                  </div>
+                  <div className="overflow-y-auto px-5 pb-6 flex flex-col gap-5">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: 'var(--lv-muted)' }}>Ordenar por</p>
+                      <div className="flex flex-wrap gap-2">
+                        {LIST_TYPES.map(({ id, label }) => (
+                          <button
+                            key={id}
+                            onClick={() => setListType(id)}
+                            className="px-4 py-1.5 rounded-full text-sm font-medium"
+                            style={{
+                              background: listType === id ? 'var(--brand-yellow)' : 'var(--chip)',
+                              color:      listType === id ? '#0d111a'              : 'var(--lv-muted)',
+                              border:     listType === id ? 'none'                 : '1px solid var(--divider)',
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      className="w-full py-3.5 rounded-xl text-sm font-semibold"
+                      style={{ background: 'var(--brand-yellow)', color: '#0d111a' }}
+                      onClick={() => setFilterOpen(false)}
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-        ) : visibleItems.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-40 gap-2 px-8 text-center">
-            <p className="text-sm" style={{ color: '#555' }}>
-              {query ? 'Nenhum resultado encontrado.' : 'Configure VITE_TMDB_API_KEY para navegar no catálogo.'}
-            </p>
-          </div>
-        ) : (
+        </div>
+
+        {/* ── Scrollable content ── */}
+        <div className="flex-1 overflow-y-auto no-scrollbar">
           <div className="pb-8">
 
-            {/* Featured wide banner */}
-            {featured && (
-              <div className="px-4 pt-2">
-                <button
-                  className="relative w-full overflow-hidden active:scale-[0.99] transition-transform"
-                  style={{ borderRadius: 16, aspectRatio: '16/9' }}
-                  onClick={() => handleItemClick(featured)}
-                >
-                  {(featured.backdrop ?? featured.cover) ? (
-                    <img
-                      src={featured.backdrop ?? featured.cover!}
-                      alt={featured.title}
-                      className="w-full h-full object-cover"
-                      loading="eager"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center" style={{ background: '#1a1a1a' }}>
-                      <span className="text-4xl">🎬</span>
-                    </div>
-                  )}
-                  <div
-                    className="absolute inset-0 flex flex-col justify-end p-4"
-                    style={{ borderRadius: 16, background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 55%)' }}
-                  >
-                    <h3 className="text-base font-bold" style={{ color: '#fff' }}>{featured.title}</h3>
-                    <div className="flex items-center gap-2 mt-1">
-                      {featured.releaseDate && (
-                        <span className="text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                          {featured.releaseDate.slice(0, 4)}
-                        </span>
-                      )}
-                      {featured.rating && (
-                        <span className="flex items-center gap-0.5 text-xs font-semibold" style={{ color: '#f59e0b' }}>
-                          <Star size={10} fill="#f59e0b" /> {featured.rating.toFixed(1)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </button>
-              </div>
-            )}
-
-            {/* "Novos" section — horizontal row */}
-            {newItems.length > 0 && (
-              <div className="mt-6">
-                <div className="flex items-center justify-between px-4 mb-3">
-                  <h3 className="text-[15px] font-bold" style={{ color: '#e0e0e0' }}>
-                    {LIST_TYPES.find((l) => l.id === listType)?.label ?? 'Novos'}
-                  </h3>
-                  <button className="flex items-center gap-0.5 text-xs" style={{ color: '#555' }}>
-                    Ver todos <ChevronRight size={14} />
-                  </button>
-                </div>
-                <div className="flex gap-2.5 overflow-x-auto no-scrollbar px-4 pb-1">
-                  {newItems.map((item) => (
+            {/* ── Independent banner — always shown, independent of filter ── */}
+              {bannerItem && (
+                <div className="px-4 pt-3">
+                  <div style={{ position: 'relative' }}>
                     <button
-                      key={item.id}
-                      className="shrink-0 text-left active:scale-95 transition-transform"
-                      style={{ width: 104 }}
-                      onClick={() => handleItemClick(item)}
+                      className="relative w-full overflow-hidden active:scale-[0.99] transition-transform"
+                      style={{ borderRadius: 16, aspectRatio: '16/9' }}
+                      onClick={() => handleItemClick(bannerItem)}
                     >
-                      <div
-                        className="relative w-full overflow-hidden"
-                        style={{ aspectRatio: '2/3', background: '#1a1a1a', borderRadius: 12 }}
-                      >
-                        {item.cover ? (
-                          <img
-                            src={item.cover}
-                            alt={item.title}
-                            className="w-full h-full object-cover"
-                            style={{ borderRadius: 12 }}
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-2xl">🎬</div>
-                        )}
-                        {item.rating && (
-                          <div
-                            className="absolute top-1.5 right-1.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold"
-                            style={{ background: 'rgba(0,0,0,0.75)', color: '#f59e0b' }}
-                          >
-                            <Star size={8} fill="#f59e0b" /> {item.rating.toFixed(1)}
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-xs font-medium mt-1.5 leading-tight line-clamp-1" style={{ color: '#e0e0e0' }}>
-                        {item.title}
-                      </p>
-                      {item.releaseDate && (
-                        <p className="text-[10px] mt-0.5" style={{ color: '#555' }}>
-                          {item.releaseDate.slice(0, 4)}
-                        </p>
+                      {(bannerItem.backdrop ?? bannerItem.cover) ? (
+                        <img
+                          key={bannerItem.id}
+                          src={bannerItem.backdrop ?? bannerItem.cover!}
+                          alt={bannerItem.title}
+                          className="w-full h-full object-cover"
+                          loading="eager"
+                          style={{ transition: 'opacity 0.4s' }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center" style={{ background: 'var(--panel)' }}>
+                          <span className="text-4xl">🎬</span>
+                        </div>
                       )}
+                      <div
+                        className="absolute inset-0 flex flex-col justify-end p-4"
+                        style={{ borderRadius: 16, background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 55%)' }}
+                      >
+                        <h3 className="text-base font-bold" style={{ color: '#fff' }}>{bannerItem.title}</h3>
+                        <div className="flex items-center gap-2 mt-1">
+                          {bannerItem.releaseDate && (
+                            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                              {bannerItem.releaseDate.slice(0, 4)}
+                            </span>
+                          )}
+                          {bannerItem.rating && (
+                            <span className="flex items-center gap-0.5 text-xs font-semibold" style={{ color: '#f59e0b' }}>
+                              <Star size={10} fill="#f59e0b" /> {bannerItem.rating.toFixed(1)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </button>
-                  ))}
+                    {/* Pagination dots */}
+                    {bannerItems.length > 1 && (
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 10 }}>
+                        {bannerItems.map((_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setBannerIdx(i)}
+                            style={{
+                              width: i === bannerIdx ? 20 : 6,
+                              height: 6, borderRadius: 3, border: 'none',
+                              background: i === bannerIdx ? 'var(--brand-yellow)' : 'oklch(0.35 0.012 235)',
+                              cursor: 'pointer', transition: 'width 0.2s, background 0.2s',
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* All items — 3-col grid (4-col on md+) */}
-            {gridItems.length > 0 && (
-              <div className="mt-6 px-4">
-                <h3 className="text-[15px] font-bold mb-3" style={{ color: '#e0e0e0' }}>Todos</h3>
-                <div
-                  className="grid gap-3"
-                  style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
-                >
-                  {gridItems.map((item) => (
+              {/* ── Unified grid ── */}
+              <div className="px-4 pt-4">
+                <div className="browse-grid">
+                  {items.map((item) => (
                     <button
                       key={item.id}
                       className="flex flex-col text-left active:scale-95 transition-transform"
@@ -317,7 +466,7 @@ export function BrowsePage({ onOpenDetail }: Props) {
                     >
                       <div
                         className="relative w-full overflow-hidden"
-                        style={{ aspectRatio: '2/3', background: '#1a1a1a', borderRadius: 10, marginBottom: 6 }}
+                        style={{ aspectRatio: '2/3', background: 'var(--panel)', borderRadius: 10, marginBottom: 6, border: '1px solid var(--divider)' }}
                       >
                         {item.cover ? (
                           <img
@@ -339,11 +488,11 @@ export function BrowsePage({ onOpenDetail }: Props) {
                           </div>
                         )}
                       </div>
-                      <p className="text-xs font-medium leading-tight line-clamp-2" style={{ color: '#e0e0e0' }}>
+                      <p className="text-xs font-medium leading-tight line-clamp-2" style={{ color: 'var(--lv-text)' }}>
                         {item.title}
                       </p>
                       {item.releaseDate && (
-                        <p className="text-[10px] mt-0.5" style={{ color: '#555' }}>
+                        <p className="text-[10px] mt-0.5" style={{ color: 'var(--lv-muted)' }}>
                           {item.releaseDate.slice(0, 4)}
                         </p>
                       )}
@@ -351,10 +500,11 @@ export function BrowsePage({ onOpenDetail }: Props) {
                   ))}
                 </div>
 
+                {/* Load more */}
                 {page < totalPages && (
                   <button
                     className="w-full mt-5 py-3 rounded-xl text-sm font-medium"
-                    style={{ background: '#161616', border: '1px solid #1e1e1e', color: '#888' }}
+                    style={{ background: 'var(--chip)', border: '1px solid var(--divider)', color: 'var(--lv-muted)' }}
                     onClick={loadMore}
                     disabled={loading}
                   >
@@ -362,99 +512,23 @@ export function BrowsePage({ onOpenDetail }: Props) {
                   </button>
                 )}
               </div>
+
+            {/* Loading / empty states inside the grid area */}
+            {loading && items.length === 0 && (
+              <div className="flex items-center justify-center h-40">
+                <p className="text-sm" style={{ color: 'var(--lv-muted)' }}>Carregando…</p>
+              </div>
+            )}
+            {!loading && items.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-32 gap-2 px-8 text-center">
+                <p className="text-sm" style={{ color: 'var(--lv-muted)' }}>
+                  {query ? 'Nenhum resultado encontrado.' : 'Configure VITE_TMDB_API_KEY para navegar no catálogo.'}
+                </p>
+              </div>
             )}
           </div>
-        )}
+        </div>
       </div>
-
-      {/* ══ Filter bottom sheet ══ */}
-      {filterOpen && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-40"
-            style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)' }}
-            onClick={() => setFilterOpen(false)}
-          />
-
-          {/* Sheet */}
-          <div
-            className="fixed bottom-0 left-0 right-0 z-50 flex flex-col"
-            style={{
-              background: '#141414',
-              borderRadius: '20px 20px 0 0',
-              border: '1px solid rgba(255,255,255,0.08)',
-              maxHeight: '80vh',
-            }}
-          >
-            {/* Handle */}
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="rounded-full" style={{ width: 36, height: 4, background: '#333' }} />
-            </div>
-
-            <div className="flex items-center justify-between px-5 pt-2 pb-4">
-              <h3 className="text-base font-bold" style={{ color: '#fff' }}>Filtros</h3>
-              <button onClick={() => setFilterOpen(false)} style={{ color: '#555' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="overflow-y-auto px-5 pb-6 flex flex-col gap-5">
-              {/* Content type */}
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: '#555' }}>Conteúdo</p>
-                <div className="flex flex-wrap gap-2">
-                  {CATEGORIES.map(({ id, label }) => (
-                    <button
-                      key={id}
-                      onClick={() => { setCategory(id); setQuery(''); setSearchInput('') }}
-                      className="px-4 py-1.5 rounded-full text-sm font-medium"
-                      style={{
-                        background: category === id ? '#ffffff' : '#1e1e1e',
-                        color:      category === id ? '#000' : '#888',
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Sort / list type */}
-              {category !== 'books' && (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: '#555' }}>Ordenar por</p>
-                  <div className="flex flex-wrap gap-2">
-                    {LIST_TYPES.map(({ id, label }) => (
-                      <button
-                        key={id}
-                        onClick={() => setListType(id)}
-                        className="px-4 py-1.5 rounded-full text-sm font-medium"
-                        style={{
-                          background: listType === id ? '#1e1e1e' : 'transparent',
-                          color:      listType === id ? '#e0e0e0' : '#555',
-                          border:     `1px solid ${listType === id ? '#2a2a2a' : 'transparent'}`,
-                        }}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Apply */}
-              <button
-                className="w-full py-3.5 rounded-xl text-sm font-semibold"
-                style={{ background: '#ffffff', color: '#000' }}
-                onClick={() => setFilterOpen(false)}
-              >
-                Aplicar filtros
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+    </>
   )
 }

@@ -1,83 +1,128 @@
-import { Home, Search, Heart, Bell, User } from 'lucide-react'
-import { AbyssLogo } from '../ui/AbyssLogo'
+/**
+ * Sidebar — tablet/desktop only (md+).
+ * User profile lives in the tablet header (App.tsx), not here.
+ */
+import { Home, Search, Library, Settings, Bug, Lightbulb, HelpCircle } from 'lucide-react'
 
-const NAV = [
-  { id: 'home',     label: 'Início',     icon: Home   },
-  { id: 'browse',   label: 'Descobrir',  icon: Search },
-  { id: 'library',  label: 'Biblioteca', icon: Heart  },
-  { id: 'releases', label: 'Novidades',  icon: Bell   },
-  { id: 'profile',  label: 'Perfil',     icon: User   },
+const MAIN_NAV = [
+  { id: 'home',    label: 'Início',    icon: Home    },
+  { id: 'browse',  label: 'Descobrir', icon: Search  },
+  { id: 'library', label: 'Biblioteca', icon: Library },
 ]
 
 interface Props {
   activePage: string
   onNavigate: (page: string) => void
-  unreadCount?: number
+  onBugReport?: () => void
+  onSuggestion?: () => void
 }
 
-export function Sidebar({ activePage, onNavigate, unreadCount = 0 }: Props) {
+export function Sidebar({ activePage, onNavigate, onBugReport, onSuggestion }: Props) {
+
+  const navItem = (id: string, label: string, Icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>) => {
+    const active = activePage === id
+    return (
+      <button
+        key={id}
+        onClick={() => onNavigate(id)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '10px 12px', borderRadius: 8,
+          border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left',
+          background: 'transparent',
+          color: active ? 'var(--lv-text)' : 'var(--lv-muted)',
+          fontWeight: active ? 600 : 500,
+          fontSize: 15,
+          transition: 'color 0.15s',
+          fontFamily: 'Inter, system-ui, sans-serif',
+        }}
+        onMouseEnter={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.color = 'var(--lv-text)' }}
+        onMouseLeave={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.color = 'var(--lv-muted)' }}
+      >
+        <Icon
+          size={20}
+          strokeWidth={active ? 2.2 : 1.7}
+          style={{ color: active ? 'var(--lv-text)' : 'var(--lv-muted)', flexShrink: 0 }}
+        />
+        {label}
+      </button>
+    )
+  }
+
   return (
     <aside
-      className="flex flex-col shrink-0 h-full overflow-hidden"
-      style={{ width: 216, background: '#111111', borderRight: '1px solid rgba(255,255,255,0.05)' }}
+      style={{
+        width: 220, flexShrink: 0, height: '100%',
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden', position: 'relative',
+      }}
     >
-      {/* Logo */}
-      <div
-        className="flex items-center gap-3 px-5 shrink-0"
-        style={{ height: 64, borderBottom: '1px solid rgba(255,255,255,0.04)' }}
-      >
-        <AbyssLogo size={26} />
-        <span
-          className="font-bold text-base tracking-tight"
-          style={{
-            background: 'linear-gradient(135deg, #00d4ff, #7c5cff)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }}
-        >
-          Abyss
+      {/* ── Wordmark ── */}
+      <div style={{ padding: '20px 20px 20px' }}>
+        <span style={{
+          fontFamily: "'Poppins', sans-serif",
+          fontWeight: 700, fontSize: 22,
+          letterSpacing: '-0.5px', color: '#ffffff',
+        }}>
+          abyss
         </span>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 pt-3 flex flex-col gap-0.5 overflow-y-auto no-scrollbar">
-        {NAV.map(({ id, label, icon: Icon }) => {
-          const active = activePage === id
-          const badge = id === 'releases' && unreadCount > 0
-          return (
-            <button
-              key={id}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-left"
-              style={{
-                background: active ? '#1e1e1e' : 'transparent',
-                color: active ? '#e0e0e0' : '#555',
-                transition: 'background 0.15s, color 0.15s',
-              }}
-              onClick={() => onNavigate(id)}
-            >
-              <div className="relative shrink-0">
-                <Icon
-                  size={17}
-                  strokeWidth={active ? 2.3 : 1.8}
-                  style={{ color: active ? '#00b4ff' : '#555' }}
-                />
-                {badge && (
-                  <span
-                    className="absolute rounded-full"
-                    style={{ width: 6, height: 6, background: '#00b4ff', top: -2, right: -2 }}
-                  />
-                )}
-              </div>
-              {label}
-            </button>
-          )
-        })}
+      {/* ── Main nav ── */}
+      <nav style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {MAIN_NAV.map(({ id, label, icon }) => navItem(id, label, icon))}
       </nav>
 
-      {/* Footer */}
-      <div className="px-5 py-4 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-        <p className="text-[10px]" style={{ color: '#2a2a2a' }}>Abyss Web PWA</p>
+      {/* ── Separator ── */}
+      <div style={{ margin: '12px 16px', borderTop: '1px solid var(--divider)' }} />
+
+      {/* ── Settings nav ── */}
+      <nav style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {navItem('settings', 'Ajustes', Settings)}
+      </nav>
+
+      <div style={{ flex: 1 }} />
+
+      {/* ── Footer: version + action icons ── */}
+      <div style={{ padding: '8px 12px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px' }}>
+          <button
+            onClick={() => onNavigate('releases')}
+            title="Ver novidades e versões"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flex: 1, textAlign: 'left' }}
+          >
+            <span style={{ fontSize: 10, color: 'oklch(0.35 0.012 235)' }}>
+              v{__APP_VERSION__} · Abyss Web
+            </span>
+          </button>
+          <button
+            title="Reportar bug"
+            onClick={() => onBugReport?.()}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'oklch(0.40 0.01 240)' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--lv-muted)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'oklch(0.40 0.01 240)' }}
+          >
+            <Bug size={13} />
+          </button>
+          <button
+            title="Sugestões"
+            onClick={() => onSuggestion?.()}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'oklch(0.40 0.01 240)' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--lv-muted)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'oklch(0.40 0.01 240)' }}
+          >
+            <Lightbulb size={13} />
+          </button>
+          <button
+            title="Ajuda"
+            onClick={() => window.open('https://wa.me/5537999922220?text=Suporte+Abyss', '_blank')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'oklch(0.40 0.01 240)' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--lv-muted)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'oklch(0.40 0.01 240)' }}
+          >
+            <HelpCircle size={13} />
+          </button>
+        </div>
       </div>
     </aside>
   )

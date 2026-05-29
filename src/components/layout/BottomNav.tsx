@@ -1,33 +1,42 @@
-import { Home, Search, Heart, Bell, User } from 'lucide-react'
+import { Home, Search, Heart, User } from 'lucide-react'
 
 const NAV = [
-  { id: 'home',     icon: Home    },
-  { id: 'browse',   icon: Search  },
-  { id: 'library',  icon: Heart   },
-  { id: 'releases', icon: Bell    },
-  { id: 'profile',  icon: User    },
+  { id: 'home',    icon: Home   },
+  { id: 'browse',  icon: Search },
+  { id: 'library', icon: Heart  },
+  { id: 'profile', icon: User   },
 ]
 
 interface Props {
   activePage: string
   onNavigate: (page: string) => void
   unreadCount?: number
+  notifCount?: number
+  onNotifClick?: () => void
+  libraryBadge?: boolean
 }
 
-export function BottomNav({ activePage, onNavigate, unreadCount = 0 }: Props) {
+export function BottomNav({
+  activePage,
+  onNavigate,
+  unreadCount = 0,
+  notifCount = 0,
+  libraryBadge,
+}: Props) {
   return (
     <nav
       className="shrink-0 pb-safe"
-      style={{ background: '#0f0f0f', borderTop: '1px solid rgba(255,255,255,0.05)' }}
+      style={{ background: 'var(--panel)', borderTop: '1px solid var(--divider)' }}
     >
-      <div className="flex items-center" style={{ height: 56 }}>
+      <div className="flex items-center" style={{ height: 58 }}>
         {NAV.map(({ id, icon: Icon }) => {
           const active = activePage === id
-          const badge = id === 'releases' && unreadCount > 0
+          const showBadge = id === 'library' && (libraryBadge ?? false)
           return (
             <button
               key={id}
               className="flex-1 flex items-center justify-center h-full"
+              style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
               onClick={() => onNavigate(id)}
             >
               <div
@@ -35,19 +44,19 @@ export function BottomNav({ activePage, onNavigate, unreadCount = 0 }: Props) {
                 style={{
                   width: 46,
                   height: 34,
-                  background: active ? 'rgba(255,255,255,0.09)' : 'transparent',
+                  background: active ? 'oklch(0.85 0.17 90 / 0.12)' : 'transparent',
                   transition: 'background 0.15s',
                 }}
               >
                 <Icon
                   size={22}
                   strokeWidth={active ? 2.5 : 1.7}
-                  style={{ color: active ? '#ffffff' : '#484848' }}
+                  style={{ color: active ? 'var(--brand-yellow)' : 'oklch(0.40 0.01 240)' }}
                 />
-                {badge && (
+                {showBadge && (
                   <span
                     className="absolute rounded-full"
-                    style={{ width: 7, height: 7, background: '#00b4ff', top: 4, right: 5 }}
+                    style={{ width: 6, height: 6, background: 'var(--brand-yellow)', top: 4, right: 5 }}
                   />
                 )}
               </div>

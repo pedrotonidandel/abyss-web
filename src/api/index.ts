@@ -33,7 +33,7 @@ const auth = {
     return r.user
   },
 
-  async login(data: { email: string; password: string }): Promise<User> {
+  async login(data: { email?: string; username?: string; password: string }): Promise<User> {
     const r = await client.request<AuthResponse>('POST', '/api/v1/auth/login', data, { skipAuth: true })
     client.setSession(r)
     return r.user
@@ -107,6 +107,20 @@ const auth = {
     await client.request<{ ok: true }>('DELETE', '/api/v1/auth/avatar')
   },
 
+  // ── Own cover photo ──
+  async getCover(): Promise<string | null> {
+    const r = await client.request<{ dataUrl: string | null }>('GET', '/api/v1/auth/cover')
+    return r.dataUrl
+  },
+
+  async saveCover(dataUrl: string): Promise<void> {
+    await client.request<{ ok: true }>('PUT', '/api/v1/auth/cover', { dataUrl })
+  },
+
+  async deleteCover(): Promise<void> {
+    await client.request<{ ok: true }>('DELETE', '/api/v1/auth/cover')
+  },
+
   // ── Session introspection (no roundtrip) ──
   isAuthenticated(): boolean { return client.isAuthenticated() },
   hasRefreshToken(): boolean { return client.hasRefreshToken() },
@@ -114,9 +128,8 @@ const auth = {
 }
 
 // ─── Sources ───────────────────────────────────────────────────────────────
-// The server stores only addon manifests (id, name, category, addedAt).
-// URL is stored exclusively in localStorage (localAddonUrlStore) — it never
-// reaches the server. Actual download content is fetched client-side.
+// The server stores addon manifests including URL for cross-device sync.
+// Download content is still fetched client-side.
 
 const sources = {
   list(): Promise<AddonManifest[]> {
@@ -124,9 +137,9 @@ const sources = {
   },
 
   async create(manifest: AddonManifest): Promise<void> {
-    // Send only identity fields — url is excluded intentionally
-    const { id, name, category, addedAt } = manifest
-    await client.request<{ ok: true }>('POST', '/api/v1/sources', { id, name, category, addedAt })
+    // Send url so users can sync sources across devices
+    const { id, name, category, url, addedAt } = manifest
+    await client.request<{ ok: true }>('POST', '/api/v1/sources', { id, name, category, url: url ?? null, addedAt })
   },
 
   async remove(id: string): Promise<void> {
@@ -257,6 +270,11 @@ const users = {
 
   async getAvatar(userId: number): Promise<string | null> {
     const r = await client.request<{ dataUrl: string | null }>('GET', `/api/v1/users/${userId}/avatar`)
+    return r.dataUrl
+  },
+
+  async getCover(userId: number): Promise<string | null> {
+    const r = await client.request<{ dataUrl: string | null }>('GET', `/api/v1/users/${userId}/cover`)
     return r.dataUrl
   },
 }

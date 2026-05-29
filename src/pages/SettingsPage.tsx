@@ -218,8 +218,8 @@ export function SettingsPage({ onBack }: SettingsPageProps) {
               fontSize: 28, fontWeight: 700, color: 'var(--brand-yellow)',
               overflow: 'hidden', position: 'relative',
             }}>
-              {user?.avatarUrl ? (
-                <img src={user.avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              {(user as unknown as { avatarUrl?: string })?.avatarUrl ? (
+                <img src={(user as unknown as { avatarUrl?: string }).avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 <span>{(user?.displayName ?? user?.username ?? '?')[0].toUpperCase()}</span>
               )}

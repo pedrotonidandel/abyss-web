@@ -56,9 +56,10 @@ export function HomePage({ onOpenDetail }: Props) {
     try {
       let result: { items: CatalogItem[]; totalPages: number }
       if (q.trim()) {
-        result = await fetchCatalogSearch(cat, q.trim())
+        result = await fetchCatalogSearch(cat, q.trim(), pg)
       } else {
-        result = await fetchCatalogPage(cat, pg, sort)
+        const listType = sort === 'new' ? 'new_releases' : sort
+        result = await fetchCatalogPage(cat, pg, listType)
       }
       setItems((prev) => append ? [...prev, ...result.items] : result.items)
       setTotalPages(result.totalPages)

@@ -69,6 +69,7 @@ export interface ApiDetail extends ApiEnrichment {
   streamingServices: StreamingProvider[]
   tmdbId?: number           // store resolved TMDB ID
   runtime?: number          // runtime in minutes (movies)
+  voteCount?: number        // number of TMDB votes
   tmdbSeasons?: TmdbSeason[] // for series/animes
 }
 
@@ -252,6 +253,7 @@ export async function fetchDetail(
         title: detail.title as string,
         description: (detail.overview as string) ?? '',
         rating: detail.vote_average ? (detail.vote_average as number) / 2 : null,
+        voteCount: (detail.vote_count as number | null) ?? undefined,
         genres: ((detail.genres as { name: string }[]) ?? []).map((g) => g.name),
         releaseDate: (detail.release_date as string) ?? null,
         developer: (detail.production_companies as { name: string }[] | undefined)?.[0]?.name ?? null,

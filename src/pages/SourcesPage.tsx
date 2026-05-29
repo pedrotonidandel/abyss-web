@@ -143,8 +143,6 @@ export function SourcesPage({ onBack }: SourcesPageProps) {
     borderRadius: 10, color: 'var(--lv-text)', fontSize: 14, outline: 'none',
   }
 
-  const catInfo = CATEGORY_OPTIONS.find((c) => c.value === category)!
-
   return (
     <div className="flex flex-col h-full overflow-hidden" style={{ background: 'var(--app-bg)' }}>
       {/* Header */}

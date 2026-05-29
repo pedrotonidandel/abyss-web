@@ -226,7 +226,7 @@ export function ProfilePage({ onLogout, viewedUserId, onNavigate, initialSubPage
               <span>{currentTitle.emoji}</span> {currentTitle.label}
             </button>
           )}
-          {user?.bio && isOwnProfile && (
+          {(user as unknown as { bio?: string })?.bio && isOwnProfile && (
             <p style={{ fontSize: 13, color: 'var(--lv-muted)', marginTop: 10, lineHeight: 1.5 }}>{(user as unknown as { bio?: string }).bio}</p>
           )}
         </div>

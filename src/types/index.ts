@@ -1,4 +1,4 @@
-export type ContentCategory = 'movies' | 'series' | 'books' | 'animes'
+export type ContentCategory = 'movies' | 'series' | 'books' | 'animes' | 'games'
 
 export type ItemLicense = 'freeware' | 'open_source' | 'demo' | 'public_domain' | 'commercial'
 

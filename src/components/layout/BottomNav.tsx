@@ -10,17 +10,12 @@ const NAV = [
 interface Props {
   activePage: string
   onNavigate: (page: string) => void
-  unreadCount?: number
-  notifCount?: number
-  onNotifClick?: () => void
   libraryBadge?: boolean
 }
 
 export function BottomNav({
   activePage,
   onNavigate,
-  unreadCount = 0,
-  notifCount = 0,
   libraryBadge,
 }: Props) {
   return (

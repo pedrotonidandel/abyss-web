@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { Heart, Eye, Film, Tv, BookOpen, Sparkles, Bell, X } from 'lucide-react'
-// BookOpen kept for CAT_ICONS map (books items may still exist in persisted library data)
+import { Heart, Eye, Film, Tv, BookOpen, Sparkles, Gamepad2, Bell, X } from 'lucide-react'
+// BookOpen/Gamepad2 kept for CAT_ICONS map (legacy items may still exist in persisted library data)
 import { useAppStore } from '../store/useAppStore'
 import { api } from '../api'
 import type { ContentCategory, DownloadItem, Source, LibraryItemServer } from '../types'
@@ -32,6 +32,7 @@ const CAT_ICONS: Record<ContentCategory, React.ComponentType<{ size?: number }>>
   series: Tv,
   books: BookOpen,
   animes: Sparkles,
+  games: Gamepad2,
 }
 
 const CAT_EMOJIS: Record<ContentCategory, string> = {
@@ -39,6 +40,7 @@ const CAT_EMOJIS: Record<ContentCategory, string> = {
   series: '📺',
   books: '📚',
   animes: '🌸',
+  games: '🎮',
 }
 
 interface LibraryPageProps {

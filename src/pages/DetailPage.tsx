@@ -46,7 +46,6 @@ function SeriesEpisodesSection({
   addonSeasons: SeriesSeason[]
   tmdbSeasons: TmdbSeason[]
   onStream: (uri: string) => void
-  onWatch: () => void
 }) {
   const [selectedSeason, setSelectedSeason] = useState(0)
 
@@ -591,7 +590,6 @@ export function DetailPage({ item, source, onClose }: DetailPageProps) {
               addonSeasons={item.seasons ?? []}
               tmdbSeasons={detail?.tmdbSeasons ?? []}
               onStream={(uri) => setStreamUri(uri)}
-              onWatch={() => setWatchOpen(true)}
             />
           ) : null}
 

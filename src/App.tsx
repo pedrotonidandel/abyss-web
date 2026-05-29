@@ -355,7 +355,6 @@ export default function App() {
             <BottomNav
               activePage={page}
               onNavigate={(p) => { navigate(p) }}
-              unreadCount={unreadCount}
               libraryBadge={unreadCount > 0}
             />
           </div>

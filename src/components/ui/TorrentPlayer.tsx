@@ -67,7 +67,8 @@ function extractWssTrackers(magnet: string): string[] {
 
 export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const clientRef = useRef<import('webtorrent').Instance | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const clientRef = useRef<any>(null)
   const [phase, setPhase] = useState<'connecting' | 'buffering' | 'playing' | 'error'>('connecting')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [stats, setStats] = useState<TorrentStats | null>(null)
@@ -123,7 +124,7 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
         })
         clientRef.current = client
 
-        client.on('error', (err) => {
+        client.on('error', (err: unknown) => {
           if (!destroyed) { setPhase('error'); setErrorMsg(String(err)) }
         })
 
@@ -136,7 +137,7 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
           setErrorMsg('Nenhum peer encontrado após 30 segundos. Este torrent pode não ter seeders ativos. Tente adicionar trackers personalizados nas configurações.')
         }, 30000)
 
-        torrent.on('error', (err) => {
+        torrent.on('error', (err: unknown) => {
           if (!destroyed) { setPhase('error'); setErrorMsg(String(err)) }
         })
 
@@ -159,7 +160,7 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
           setPhase('buffering')
 
           // renderTo works for MP4/WebM; for MKV we append to body temporarily
-          file.renderTo(videoRef.current!, { autoplay: true }, (err) => {
+          file.renderTo(videoRef.current!, { autoplay: true }, (err: unknown) => {
             if (err) { setPhase('error'); setErrorMsg(String(err)) }
             else      { setPhase('playing') }
           })

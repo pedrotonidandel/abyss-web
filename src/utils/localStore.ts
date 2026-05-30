@@ -25,13 +25,23 @@ export const localMagnetStore = {
   remove: (key: string) => localStorage.removeItem(`abyss.magnet.${key}`),
 }
 
-// Custom tracker list (appended to every torrent started by the PWA)
+// Public WSS trackers that support WebTorrent (WebRTC) out of the box.
+// Used as defaults when the user hasn't configured any custom trackers.
+const DEFAULT_WSS_TRACKERS = [
+  'wss://tracker.btorrent.xyz',
+  'wss://tracker.openwebtorrent.com',
+  'wss://tracker.webtorrent.dev',
+]
+
+// Custom tracker list (appended to every torrent started by the PWA).
+// Falls back to DEFAULT_WSS_TRACKERS so torrents work without manual setup.
 export const localTrackerStore = {
   get: (): string[] => {
     try {
       const raw = localStorage.getItem('abyss.customTrackers')
-      return raw ? (JSON.parse(raw) as string[]) : []
-    } catch { return [] }
+      return raw ? (JSON.parse(raw) as string[]) : DEFAULT_WSS_TRACKERS
+    } catch { return DEFAULT_WSS_TRACKERS }
   },
   set: (trackers: string[]) => localStorage.setItem('abyss.customTrackers', JSON.stringify(trackers)),
+  defaults: DEFAULT_WSS_TRACKERS,
 }

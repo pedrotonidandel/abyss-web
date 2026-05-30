@@ -38,6 +38,35 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: oklch(0.30 0.012 235); border-radius: 2px; }
 
+/* Video player seek bar */
+input[type="range"].vp-seek {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+}
+input[type="range"].vp-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--brand-yellow);
+  cursor: pointer;
+  box-shadow: 0 0 4px rgba(0,0,0,0.5);
+}
+input[type="range"].vp-seek::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: var(--brand-yellow);
+  cursor: pointer;
+}
+
 /* Skeleton shimmer */
 @keyframes shimmer {
   0%   { background-position: -200% 0; }

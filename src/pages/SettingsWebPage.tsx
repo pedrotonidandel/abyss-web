@@ -1,16 +1,18 @@
 import { useState, useMemo, useRef } from 'react'
-import { Settings, Wifi, Bell, Trophy, Shield, Package } from 'lucide-react'
+import { Settings, Wifi, Bell, Trophy, Shield, Package, Zap } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { api } from '../api'
-import { localTrackerStore } from '../utils/localStore'
+import { localTrackerStore, realDebridStore } from '../utils/localStore'
+import { verifyRdKey } from '../utils/realDebrid'
 import { unlockedTitles, defaultTitle, getTitle, computeStats } from '../utils/titles'
 import { SourcesPage } from './SourcesPage'
 
-type Section = 'geral' | 'trackers' | 'notificacoes' | 'titulos' | 'conta' | 'addons'
+type Section = 'geral' | 'trackers' | 'premium' | 'notificacoes' | 'titulos' | 'conta' | 'addons'
 
 const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'geral',         label: 'Geral',                icon: <Settings size={15} /> },
   { id: 'trackers',      label: 'Trackers',             icon: <Wifi size={15} /> },
+  { id: 'premium',       label: 'Premium',              icon: <Zap size={15} /> },
   { id: 'notificacoes',  label: 'Notificações',         icon: <Bell size={15} /> },
   { id: 'titulos',       label: 'Títulos',              icon: <Trophy size={15} /> },
   { id: 'conta',         label: 'Conta & Privacidade',  icon: <Shield size={15} /> },
@@ -428,6 +430,213 @@ function ContaSection() {
   )
 }
 
+// ─── Section: Premium ────────────────────────────────────────────────────────
+
+function PremiumSection() {
+  const [key, setKey]           = useState(() => realDebridStore.getKey() ?? '')
+  const [saved, setSaved]       = useState(() => !!realDebridStore.getKey())
+  const [verifying, setVerifying] = useState(false)
+  const [verifyResult, setVerifyResult] = useState<{ ok: true; username: string; type: string; expiration: string } | { ok: false; msg: string } | null>(
+    () => {
+      const k = realDebridStore.getKey()
+      return k ? { ok: true, username: '…', type: '…', expiration: '…' } : null
+    }
+  )
+
+  const handleSave = () => {
+    const trimmed = key.trim()
+    if (!trimmed) {
+      realDebridStore.clearKey()
+      setSaved(false)
+      setVerifyResult(null)
+      return
+    }
+    realDebridStore.setKey(trimmed)
+    setSaved(true)
+    setVerifyResult(null)
+  }
+
+  const handleVerify = async () => {
+    const k = key.trim()
+    if (!k) return
+    setVerifying(true)
+    setVerifyResult(null)
+    try {
+      const info = await verifyRdKey(k)
+      setVerifyResult({ ok: true, ...info })
+    } catch (e) {
+      setVerifyResult({ ok: false, msg: (e as Error).message })
+    } finally {
+      setVerifying(false)
+    }
+  }
+
+  const handleClear = () => {
+    setKey('')
+    realDebridStore.clearKey()
+    setSaved(false)
+    setVerifyResult(null)
+  }
+
+  return (
+    <div>
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--lv-text)', margin: '0 0 4px' }}>Serviços Premium</h2>
+
+      {/* Explicação */}
+      <div style={{
+        marginTop: 16, padding: '14px 16px', borderRadius: 12,
+        background: 'oklch(0.85 0.17 90 / 0.06)',
+        border: '1px solid oklch(0.85 0.17 90 / 0.20)',
+      }}>
+        <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand-yellow)', margin: '0 0 6px' }}>
+          ⚡ Por que Real-Debrid?
+        </p>
+        <p style={{ fontSize: 13, color: 'var(--lv-muted)', margin: 0, lineHeight: 1.6 }}>
+          Torrents no browser só funcionam com pares WebRTC — a maioria dos seeders usa clientes comuns (qBittorrent, etc.) que o browser não consegue alcançar.
+        </p>
+        <p style={{ fontSize: 13, color: 'var(--lv-muted)', margin: '8px 0 0', lineHeight: 1.6 }}>
+          Com o Real-Debrid, o Abyss envia o magnet para os servidores deles, que baixam via UDP normal e devolvem um link HTTP direto. Funciona com praticamente qualquer torrent, imediatamente.
+        </p>
+      </div>
+
+      <SubTitle>REAL-DEBRID</SubTitle>
+
+      {/* Link para obter a chave */}
+      <p style={{ fontSize: 12, color: 'var(--lv-muted)', marginBottom: 12, lineHeight: 1.5 }}>
+        Crie uma conta gratuita em{' '}
+        <a
+          href="https://real-debrid.com/?id=free"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: 'var(--brand-yellow)', textDecoration: 'none', fontWeight: 600 }}
+        >
+          real-debrid.com
+        </a>
+        {' '}e acesse a chave API em{' '}
+        <a
+          href="https://real-debrid.com/apitoken"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: 'var(--brand-yellow)', textDecoration: 'none', fontWeight: 600 }}
+        >
+          Minha Conta → API Token
+        </a>
+        .
+      </p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div>
+          <label style={{ fontSize: 12, color: 'var(--lv-muted)', display: 'block', marginBottom: 6 }}>
+            Chave API do Real-Debrid
+          </label>
+          <input
+            type="password"
+            value={key}
+            onChange={e => { setKey(e.target.value); setSaved(false); setVerifyResult(null) }}
+            placeholder="Cole sua chave API aqui"
+            style={inputStyle}
+            onFocus={e => { (e.target as HTMLInputElement).style.borderColor = 'rgba(229,160,13,0.4)' }}
+            onBlur={e  => { (e.target as HTMLInputElement).style.borderColor = 'var(--divider)' }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            onClick={handleSave}
+            disabled={!key.trim() && !saved}
+            style={{
+              padding: '9px 20px', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 13,
+              background: saved && key.trim() === (realDebridStore.getKey() ?? '') ? '#22c55e' : 'var(--brand-yellow)',
+              color: '#0d111a', cursor: 'pointer', transition: 'background 0.2s',
+            }}
+          >
+            {saved && key.trim() === (realDebridStore.getKey() ?? '') ? '✓ Salvo' : 'Salvar'}
+          </button>
+          <button
+            onClick={handleVerify}
+            disabled={verifying || !key.trim()}
+            style={{
+              padding: '9px 20px', borderRadius: 8, fontWeight: 600, fontSize: 13,
+              background: 'var(--chip)', color: 'var(--lv-text)',
+              border: '1px solid var(--divider)', cursor: verifying || !key.trim() ? 'default' : 'pointer',
+              opacity: verifying || !key.trim() ? 0.6 : 1,
+            }}
+          >
+            {verifying ? 'Verificando…' : 'Verificar'}
+          </button>
+          {saved && (
+            <button
+              onClick={handleClear}
+              style={{
+                padding: '9px 16px', borderRadius: 8, fontWeight: 600, fontSize: 13,
+                background: 'rgba(239,68,68,0.08)', color: '#ef4444',
+                border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer',
+              }}
+            >
+              Remover
+            </button>
+          )}
+        </div>
+
+        {/* Resultado da verificação */}
+        {verifyResult && (
+          <div style={{
+            padding: '10px 14px', borderRadius: 10,
+            background: verifyResult.ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+            border: `1px solid ${verifyResult.ok ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
+          }}>
+            {verifyResult.ok ? (
+              <div>
+                <p style={{ fontSize: 13, color: '#22c55e', fontWeight: 700, margin: '0 0 4px' }}>
+                  ✓ Conta verificada — @{verifyResult.username}
+                </p>
+                <p style={{ fontSize: 12, color: 'var(--lv-muted)', margin: 0 }}>
+                  Tipo: <strong>{verifyResult.type === 'premium' ? 'Premium ⭐' : 'Gratuito'}</strong>
+                  {verifyResult.type === 'premium' && (
+                    <> · Expira em: <strong>{new Date(verifyResult.expiration).toLocaleDateString('pt-BR')}</strong></>
+                  )}
+                </p>
+              </div>
+            ) : (
+              <p style={{ fontSize: 13, color: '#ef4444', margin: 0 }}>
+                ✗ {verifyResult.msg}
+              </p>
+            )}
+          </div>
+        )}
+
+        {saved && !verifyResult && (
+          <p style={{ fontSize: 12, color: '#22c55e', margin: 0 }}>
+            ✓ Real-Debrid ativo — o player usará RD automaticamente para magnets.
+          </p>
+        )}
+      </div>
+
+      <SubTitle>COMO FUNCIONA</SubTitle>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {[
+          ['1. Magnet enviado', 'O app envia o link para os servidores do Real-Debrid.'],
+          ['2. RD baixa o torrent', 'Real-Debrid conecta com os seeders via UDP (como um cliente normal).'],
+          ['3. URL HTTP gerada', 'O conteúdo fica em cache nos servidores deles, pronto para stream.'],
+          ['4. Reprodução direta', 'O browser recebe uma URL HTTP e toca o vídeo sem precisar de WebRTC.'],
+        ].map(([step, desc]) => (
+          <div key={step} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <span style={{
+              flexShrink: 0, fontSize: 11, fontWeight: 700,
+              padding: '2px 8px', borderRadius: 6,
+              background: 'oklch(0.85 0.17 90 / 0.12)',
+              color: 'var(--brand-yellow)',
+            }}>
+              {step}
+            </span>
+            <p style={{ fontSize: 13, color: 'var(--lv-muted)', margin: 0 }}>{desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function SettingsWebPage() {
@@ -437,6 +646,7 @@ export function SettingsWebPage() {
     switch (section) {
       case 'geral':         return <GeralSection />
       case 'trackers':      return <TrackersSection />
+      case 'premium':       return <PremiumSection />
       case 'notificacoes':  return <NotificacoesSection />
       case 'titulos':       return <TitulosSection />
       case 'conta':         return <ContaSection />

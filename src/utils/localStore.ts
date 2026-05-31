@@ -49,6 +49,13 @@ const DEFAULT_TRACKERS = [
   'http://tracker.aletorrenty.pl:2710/announce',
 ]
 
+// Real-Debrid API key — used to resolve magnets via RD servers (bypasses WebRTC limitation).
+export const realDebridStore = {
+  getKey:   (): string | null => localStorage.getItem('abyss.rdKey'),
+  setKey:   (key: string)     => localStorage.setItem('abyss.rdKey', key),
+  clearKey: ()                => localStorage.removeItem('abyss.rdKey'),
+}
+
 // Custom tracker list (appended to every torrent started by the PWA).
 // Falls back to DEFAULT_TRACKERS so torrents work without manual setup.
 export const localTrackerStore = {

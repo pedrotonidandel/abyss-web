@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { localTrackerStore } from '../../utils/localStore'
+import { localTrackerStore, realDebridStore } from '../../utils/localStore'
+import { resolveWithRealDebrid } from '../../utils/realDebrid'
 import { VideoPlayer } from './VideoPlayer'
 
 interface TorrentPlayerProps {
@@ -228,6 +229,7 @@ export function TorrentPlayer({ uri, fallbackUris = [], title, onClose }: Torren
   const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const peerTimeoutRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
   const statusTimersRef  = useRef<ReturnType<typeof setTimeout>[]>([])
+  const rdAbortRef       = useRef<AbortController | null>(null)
 
   // All URIs in priority order
   const allUris = [uri, ...fallbackUris].filter(Boolean)
@@ -303,6 +305,59 @@ export function TorrentPlayer({ uri, fallbackUris = [], title, onClose }: Torren
         video.src = activeUri
         video.load()
         return
+      }
+
+      // ── Real-Debrid (magnet → URL HTTP direta) ─────────────────────────────
+      // Se a chave RD estiver configurada, tenta resolver via RD primeiro.
+      // RD usa servidores próprios com UDP, sem limitação de WebRTC.
+      // Fallback para WebTorrent se RD falhar ou não estiver configurado.
+      const rdKey = realDebridStore.getKey()
+      if (rdKey) {
+        const rdAbort = new AbortController()
+        rdAbortRef.current = rdAbort
+        try {
+          const streamUrl = await resolveWithRealDebrid(
+            activeUri,
+            rdKey,
+            (msg) => { if (!isDestroyed()) setConnectMsg(msg) },
+            rdAbort.signal,
+          )
+          if (isDestroyed()) return
+
+          // Sucesso — toca direto via URL HTTP
+          const video = videoRef.current!
+          video.src = streamUrl
+
+          const onCanPlay = () => {
+            if (!isDestroyed()) { setPhase('playing'); video.play().catch(() => {}) }
+          }
+          const onVideoError = () => {
+            if (!isDestroyed()) {
+              const code = video.error?.code ?? 0
+              showUriError(`Erro ao reproduzir o stream do Real-Debrid (código ${code}). Tente novamente.`)
+            }
+          }
+          video.addEventListener('canplay', onCanPlay, { once: true })
+          video.addEventListener('error',   onVideoError, { once: true })
+          return  // ← encerra aqui; não precisa de WebTorrent
+        } catch (rdErr) {
+          if (isDestroyed()) return
+          if (rdAbort.signal.aborted) return  // usuário fechou o player
+
+          // RD falhou — informa e tenta WebRTC como fallback
+          const msg = (rdErr as Error).message
+          const isTimeout = msg.includes('tempo esgotado')
+          setConnectMsg(
+            isTimeout
+              ? `${msg}\nTentando via WebRTC como alternativa…`
+              : `Real-Debrid: ${msg}\nTentando via WebRTC…`
+          )
+          // Pequena pausa para o usuário ler a mensagem antes do WebRTC começar
+          await new Promise(r => setTimeout(r, 2000))
+          if (isDestroyed()) return
+        } finally {
+          rdAbortRef.current = null
+        }
       }
 
       // ── WebTorrent (magnet URI) ─────────────────────────────────────────────
@@ -472,6 +527,8 @@ export function TorrentPlayer({ uri, fallbackUris = [], title, onClose }: Torren
 
     return () => {
       destroyedRef.current = true
+      rdAbortRef.current?.abort()
+      rdAbortRef.current = null
       if (peerTimeoutRef.current) clearTimeout(peerTimeoutRef.current)
       if (statsIntervalRef.current) clearInterval(statsIntervalRef.current)
       statusTimersRef.current.forEach(clearTimeout)

@@ -11,6 +11,33 @@
 
 const RD_BASE = 'https://api.real-debrid.com/rest/1.0'
 
+// ── Mapeamento de erros da API → mensagens em português ──────────────────────
+
+const RD_ERRORS: Record<string, string> = {
+  bad_token:
+    'Token inválido ou expirado. Verifique a chave em real-debrid.com/apitoken.',
+  permission_denied:
+    'Permissão negada. Torrents requerem conta Real-Debrid Premium — contas gratuitas não têm acesso.',
+  account_locked:
+    'Conta bloqueada. Entre em contato com o suporte do Real-Debrid.',
+  not_premium:
+    'Recurso disponível apenas para contas Premium. Faça upgrade em real-debrid.com.',
+  hoster_not_available_for_free_users:
+    'Conteúdo disponível apenas para contas Premium.',
+  traffic_exhausted:
+    'Tráfego da sua conta esgotado. Renove o plano em real-debrid.com.',
+  ip_not_allowed:
+    'IP não permitido. Verifique as configurações da conta no site do Real-Debrid.',
+  two_factor_auth_needed:
+    'Autenticação de dois fatores necessária. Acesse real-debrid.com para aprovar.',
+  too_many_active_downloads:
+    'Muitos downloads ativos. Aguarde um terminar ou pause os outros.',
+  torrent_too_big:
+    'Torrent muito grande para sua conta.',
+  file_unavailable:
+    'Arquivo não disponível nos servidores do Real-Debrid.',
+}
+
 // ── HTTP helper ─────────────────────────────────────────────────────────────
 
 async function rdFetch<T>(
@@ -20,24 +47,45 @@ async function rdFetch<T>(
   body?: Record<string, string>,
   signal?: AbortSignal,
 ): Promise<T> {
-  const res = await fetch(`${RD_BASE}${path}`, {
-    method,
-    signal,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      ...(body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
-    },
-    body: body ? new URLSearchParams(body).toString() : undefined,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${RD_BASE}${path}`, {
+      method,
+      signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        ...(body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+      },
+      body: body ? new URLSearchParams(body).toString() : undefined,
+    })
+  } catch (err) {
+    // Erro de rede (offline, CORS, timeout de fetch) — diferente de erro da API
+    const msg = (err as Error).message ?? ''
+    if (msg.toLowerCase().includes('failed to fetch') || msg.includes('NetworkError')) {
+      throw new Error('Não foi possível conectar à API do Real-Debrid. Verifique sua conexão.')
+    }
+    throw err
+  }
 
   if (!res.ok) {
-    let msg = `HTTP ${res.status}`
+    let errorCode = ''
     try {
       const json = await res.json() as { error?: string; error_code?: number }
-      if (json.error) msg = json.error
-    } catch { /* ignore */ }
-    throw new Error(`Real-Debrid: ${msg}`)
+      errorCode = json.error ?? ''
+    } catch { /* ignore — resposta não-JSON */ }
+
+    const friendly = RD_ERRORS[errorCode]
+    if (friendly) throw new Error(friendly)
+
+    // Erros HTTP sem código específico
+    if (res.status === 401) throw new Error('Token inválido. Verifique a chave em real-debrid.com/apitoken.')
+    if (res.status === 403) throw new Error('Acesso negado. Sua conta pode precisar de upgrade para Premium.')
+    if (res.status === 429) throw new Error('Muitas requisições. Aguarde um momento e tente novamente.')
+    if (res.status >= 500) throw new Error(`Servidor do Real-Debrid com instabilidade (erro ${res.status}). Tente novamente em breve.`)
+
+    throw new Error(`Erro ${res.status} na API do Real-Debrid.${errorCode ? ` (${errorCode})` : ''}`)
   }
+
   if (res.status === 204) return undefined as T
   return res.json() as T
 }

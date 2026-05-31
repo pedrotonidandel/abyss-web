@@ -501,25 +501,34 @@ function PremiumSection() {
 
       <SubTitle>REAL-DEBRID</SubTitle>
 
+      {/* Aviso de premium */}
+      <div style={{
+        marginBottom: 14, padding: '10px 14px', borderRadius: 10,
+        background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)',
+      }}>
+        <p style={{ fontSize: 13, color: '#f87171', fontWeight: 700, margin: '0 0 3px' }}>
+          ⚠️ Requer conta Premium
+        </p>
+        <p style={{ fontSize: 12, color: 'var(--lv-muted)', margin: 0, lineHeight: 1.5 }}>
+          Contas gratuitas <strong>não funcionam</strong> para torrents. É necessário plano Premium (a partir de €3/mês em{' '}
+          <a href="https://real-debrid.com/premium" target="_blank" rel="noopener noreferrer"
+            style={{ color: 'var(--brand-yellow)', textDecoration: 'none' }}>
+            real-debrid.com/premium
+          </a>
+          ).
+        </p>
+      </div>
+
       {/* Link para obter a chave */}
       <p style={{ fontSize: 12, color: 'var(--lv-muted)', marginBottom: 12, lineHeight: 1.5 }}>
-        Crie uma conta gratuita em{' '}
-        <a
-          href="https://real-debrid.com/?id=free"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: 'var(--brand-yellow)', textDecoration: 'none', fontWeight: 600 }}
-        >
-          real-debrid.com
-        </a>
-        {' '}e acesse a chave API em{' '}
+        Acesse sua chave API em{' '}
         <a
           href="https://real-debrid.com/apitoken"
           target="_blank"
           rel="noopener noreferrer"
           style={{ color: 'var(--brand-yellow)', textDecoration: 'none', fontWeight: 600 }}
         >
-          Minha Conta → API Token
+          real-debrid.com/apitoken
         </a>
         .
       </p>
@@ -587,15 +596,24 @@ function PremiumSection() {
           }}>
             {verifyResult.ok ? (
               <div>
-                <p style={{ fontSize: 13, color: '#22c55e', fontWeight: 700, margin: '0 0 4px' }}>
-                  ✓ Conta verificada — @{verifyResult.username}
+                <p style={{ fontSize: 13, color: verifyResult.type === 'premium' ? '#22c55e' : '#f59e0b', fontWeight: 700, margin: '0 0 4px' }}>
+                  {verifyResult.type === 'premium' ? '✓' : '⚠️'} Conta verificada — @{verifyResult.username}
                 </p>
                 <p style={{ fontSize: 12, color: 'var(--lv-muted)', margin: 0 }}>
-                  Tipo: <strong>{verifyResult.type === 'premium' ? 'Premium ⭐' : 'Gratuito'}</strong>
+                  Tipo: <strong style={{ color: verifyResult.type === 'premium' ? '#22c55e' : '#f59e0b' }}>
+                    {verifyResult.type === 'premium' ? 'Premium ⭐' : 'Gratuito'}
+                  </strong>
                   {verifyResult.type === 'premium' && (
                     <> · Expira em: <strong>{new Date(verifyResult.expiration).toLocaleDateString('pt-BR')}</strong></>
                   )}
                 </p>
+                {verifyResult.type !== 'premium' && (
+                  <p style={{ fontSize: 12, color: '#f87171', margin: '6px 0 0', lineHeight: 1.5 }}>
+                    Conta gratuita — torrents <strong>não funcionarão</strong>. Faça upgrade para Premium em{' '}
+                    <a href="https://real-debrid.com/premium" target="_blank" rel="noopener noreferrer"
+                      style={{ color: 'var(--brand-yellow)', textDecoration: 'none' }}>real-debrid.com/premium</a>.
+                  </p>
+                )}
               </div>
             ) : (
               <p style={{ fontSize: 13, color: '#ef4444', margin: 0 }}>

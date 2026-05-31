@@ -33,8 +33,9 @@ const BUFFERING_MSGS = [
   'Quase lá, aguenta…',
 ]
 
-const connectingMsg = CONNECTING_MSGS[Math.floor(Date.now() / 1000) % CONNECTING_MSGS.length]
-const bufferingMsg  = BUFFERING_MSGS[Math.floor(Date.now() / 1000) % BUFFERING_MSGS.length]
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
 
 function extractWssTrackers(magnet: string): string[] {
   const matches = magnet.match(/[&?]tr=([^&]+)/g) ?? []
@@ -61,6 +62,7 @@ function getMseType(name: string): string | null {
 
 // ICE servers: STUN + TURN públicos para máxima conectividade.
 // TURN é essencial em redes com NAT simétrico (maioria dos celulares/3G/4G/5G).
+// Múltiplos provedores de TURN aumentam as chances de conexão.
 const ICE_SERVERS: RTCIceServer[] = [
   // Google STUN
   { urls: 'stun:stun.l.google.com:19302' },
@@ -72,7 +74,7 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.cloudflare.com:3478' },
   // Twilio STUN
   { urls: 'stun:global.stun.twilio.com:3478' },
-  // OpenRelay TURN público (metered.ca) — permite conexão mesmo atrás de NAT simétrico
+  // OpenRelay TURN (metered.ca) — relay para NAT simétrico
   { urls: 'stun:openrelay.metered.ca:80' },
   {
     urls: 'turn:openrelay.metered.ca:80',
@@ -89,7 +91,24 @@ const ICE_SERVERS: RTCIceServer[] = [
     username: 'openrelayproject',
     credential: 'openrelayproject',
   },
+  // FreeTURN — alternativa confiável
+  { urls: 'stun:freeturn.net:3478' },
+  {
+    urls: 'turn:freeturn.net:3478',
+    username: 'free',
+    credential: 'free',
+  },
+  {
+    urls: 'turn:freeturn.net:5349',
+    username: 'free',
+    credential: 'free',
+  },
 ]
+
+// Tempo máximo por tentativa antes de auto-retry
+const ATTEMPT_TIMEOUT_MS = 70_000
+// Quantas vezes reinicia automaticamente antes de mostrar o erro
+const MAX_AUTO_RETRIES = 1
 
 async function streamViaMSE(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -187,24 +206,35 @@ async function streamViaBlob(
 }
 
 export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps) {
-  const videoRef    = useRef<HTMLVideoElement>(null)
+  const videoRef     = useRef<HTMLVideoElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const clientRef   = useRef<any>(null)
+  const clientRef    = useRef<any>(null)
   const destroyedRef = useRef(false)
 
   const [phase, setPhase]       = useState<Phase>('connecting')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [stats, setStats]       = useState<TorrentStats | null>(null)
-  const [connectMsg, setConnectMsg] = useState(connectingMsg)
+  const [connectMsg, setConnectMsg] = useState(() => pickRandom(CONNECTING_MSGS))
+  const [bufferingMsg]              = useState(() => pickRandom(BUFFERING_MSGS))
+
+  // Manual retry: incrementar para forçar re-execução do effect
+  const [retryKey, setRetryKey] = useState(0)
 
   const statsIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null)
   const peerTimeoutRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const statusTimersRef   = useRef<ReturnType<typeof setTimeout>[]>([])
 
   useEffect(() => {
     destroyedRef.current = false
     const isDestroyed = () => destroyedRef.current
 
-    const start = async () => {
+    // Reseta UI ao iniciar/reiniciar
+    setPhase('connecting')
+    setErrorMsg(null)
+    setStats(null)
+    setConnectMsg(pickRandom(CONNECTING_MSGS))
+
+    const start = async (attempt: number) => {
       try {
         const { default: WebTorrent } = await import('webtorrent')
         if (isDestroyed()) return
@@ -250,27 +280,46 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
         const torrent = client.add(fullMagnet, { announce: announceList } as any)
 
         // Progressive status messages while searching for peers
-        const statusTimers = [
-          setTimeout(() => { if (!isDestroyed() && phase !== 'buffering' && phase !== 'playing') setConnectMsg('Conectando aos trackers WSS…') }, 5000),
-          setTimeout(() => { if (!isDestroyed() && phase !== 'buffering' && phase !== 'playing') setConnectMsg('Aguardando peers WebRTC… (pode demorar em redes móveis)') }, 15000),
-          setTimeout(() => { if (!isDestroyed() && phase !== 'buffering' && phase !== 'playing') setConnectMsg('Ainda tentando… verifique se o conteúdo tem seeders WebRTC') }, 35000),
-          setTimeout(() => { if (!isDestroyed() && phase !== 'buffering' && phase !== 'playing') setConnectMsg('Última tentativa via TURN relay…') }, 55000),
+        statusTimersRef.current = [
+          setTimeout(() => { if (!isDestroyed()) setConnectMsg('Conectando aos trackers WSS…') }, 6_000),
+          setTimeout(() => { if (!isDestroyed()) setConnectMsg('Aguardando peers WebRTC… (pode demorar em redes móveis)') }, 18_000),
+          setTimeout(() => { if (!isDestroyed()) setConnectMsg('Ainda tentando… ativando TURN relay…') }, 38_000),
+          setTimeout(() => {
+            if (!isDestroyed()) {
+              const retryInfo = attempt < MAX_AUTO_RETRIES
+                ? ` — reconectando automaticamente em breve (${attempt + 1}/${MAX_AUTO_RETRIES + 1})`
+                : ''
+              setConnectMsg(`Última chance via TURN relay${retryInfo}…`)
+            }
+          }, 55_000),
         ]
 
-        // Generous 90-second timeout — TURN relay pode precisar de mais tempo
+        // Timeout: se não encontrou peers, tenta novamente ou exibe erro
         peerTimeoutRef.current = setTimeout(() => {
           if (isDestroyed() || torrent.numPeers > 0 || torrent.downloaded > 0) return
-          statusTimers.forEach(clearTimeout)
-          setPhase('error')
-          setErrorMsg(
-            'Nenhum peer WebRTC encontrado em 90 segundos.\n\n' +
-            'Causas possíveis:\n' +
-            '• O torrent não tem seeders com suporte a WebRTC (necessário para browser)\n' +
-            '• Rede muito restritiva bloqueando WebRTC (tente em outra rede)\n' +
-            '• Todos os trackers wss:// estão offline\n\n' +
-            `Trackers tentados: ${announceList.join(', ')}`
-          )
-        }, 90000)
+
+          statusTimersRef.current.forEach(clearTimeout)
+
+          if (attempt < MAX_AUTO_RETRIES) {
+            // Auto-retry: destrói cliente atual e tenta de novo
+            client.destroy()
+            clientRef.current = null
+            const nextAttempt = attempt + 1
+            setConnectMsg(`Reconectando… (tentativa ${nextAttempt + 1} de ${MAX_AUTO_RETRIES + 1})`)
+            start(nextAttempt)
+          } else {
+            // Esgotou todas as tentativas
+            setPhase('error')
+            setErrorMsg(
+              'Nenhum peer WebRTC encontrado após múltiplas tentativas.\n\n' +
+              'Possíveis causas:\n' +
+              '• O torrent não tem seeders com suporte a WebRTC (necessário para browser)\n' +
+              '• Sua rede bloqueia WebRTC (tente em outra rede ou Wi-Fi)\n' +
+              '• Todos os trackers wss:// estão fora do ar\n\n' +
+              'Dica: use o app desktop (lock-app) para torrents sem suporte WebRTC.'
+            )
+          }
+        }, ATTEMPT_TIMEOUT_MS)
 
         torrent.on('warning', (warn: unknown) => {
           console.warn('[TorrentPlayer] warning:', warn)
@@ -282,21 +331,17 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
 
         // Update connecting message when tracker announces
         torrent.on('trackerAnnounce', () => {
-          if (!isDestroyed() && phase === 'connecting') {
-            setConnectMsg('Tracker conectado — procurando peers WebRTC…')
-          }
+          if (!isDestroyed()) setConnectMsg('Tracker conectado — procurando peers WebRTC…')
         })
 
         // Show peer count as soon as first peer connects
         torrent.on('wire', () => {
-          if (!isDestroyed() && phase === 'connecting') {
-            setConnectMsg('Peer encontrado! Baixando metadados…')
-          }
+          if (!isDestroyed()) setConnectMsg('Peer encontrado! Baixando metadados…')
         })
 
         torrent.on('ready', async () => {
-          peerTimeoutRef.current && clearTimeout(peerTimeoutRef.current)
-          statusTimers.forEach(clearTimeout)
+          if (peerTimeoutRef.current) clearTimeout(peerTimeoutRef.current)
+          statusTimersRef.current.forEach(clearTimeout)
           if (isDestroyed() || !videoRef.current) return
 
           const videoExts = /\.(mp4|webm|mkv|avi|mov|m4v|ts|m2ts)$/i
@@ -329,7 +374,7 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
             }
           }, 1000)
 
-          const video    = videoRef.current!
+          const video     = videoRef.current!
           const onPlaying = () => { if (!isDestroyed()) setPhase('playing') }
           const onError   = (msg: string) => { if (!isDestroyed()) { setPhase('error'); setErrorMsg(msg) } }
           const mseType   = getMseType(file.name)
@@ -358,16 +403,21 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
       }
     }
 
-    start()
+    start(0)
 
     return () => {
       destroyedRef.current = true
       if (peerTimeoutRef.current) clearTimeout(peerTimeoutRef.current)
       if (statsIntervalRef.current) clearInterval(statsIntervalRef.current)
+      statusTimersRef.current.forEach(clearTimeout)
       clientRef.current?.destroy()
       clientRef.current = null
     }
-  }, [magnetUri])
+  }, [magnetUri, retryKey])
+
+  const handleRetry = () => {
+    setRetryKey(k => k + 1)
+  }
 
   return (
     <VideoPlayer
@@ -379,6 +429,7 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
       bufferingMsg={bufferingMsg}
       errorMsg={errorMsg}
       onClose={onClose}
+      onRetry={handleRetry}
     />
   )
 }

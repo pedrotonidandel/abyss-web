@@ -18,6 +18,7 @@ interface VideoPlayerProps {
   bufferingMsg?: string
   errorMsg?: string | null
   onClose: () => void
+  onRetry?: () => void
 }
 
 function fmtTime(s: number): string {
@@ -49,6 +50,7 @@ export function VideoPlayer({
   bufferingMsg = 'Carregando…',
   errorMsg,
   onClose,
+  onRetry,
 }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -322,11 +324,35 @@ export function VideoPlayer({
             <X size={24} color="#ef4444" />
           </div>
           <p style={{ color: '#ef4444', fontSize: 15, fontWeight: 700, margin: 0, textAlign: 'center' }}>
-            Erro ao reproduzir
+            Não foi possível reproduzir
           </p>
-          <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, margin: 0, textAlign: 'center', maxWidth: 320 }}>
+          <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, margin: 0, textAlign: 'center', maxWidth: 320, whiteSpace: 'pre-line' }}>
             {errorMsg}
           </p>
+          {onRetry && (
+            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); onRetry() }}
+                style={{
+                  padding: '10px 24px', borderRadius: 10, fontWeight: 700, fontSize: 14,
+                  background: 'var(--brand-yellow)', color: '#0d111a',
+                  border: 'none', cursor: 'pointer',
+                }}
+              >
+                Tentar novamente
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onClose() }}
+                style={{
+                  padding: '10px 20px', borderRadius: 10, fontWeight: 600, fontSize: 14,
+                  background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)',
+                  border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer',
+                }}
+              >
+                Fechar
+              </button>
+            </div>
+          )}
         </div>
       )}
 

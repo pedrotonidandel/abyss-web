@@ -3,7 +3,10 @@ import { localTrackerStore } from '../../utils/localStore'
 import { VideoPlayer } from './VideoPlayer'
 
 interface TorrentPlayerProps {
-  magnetUri: string
+  /** Any playable URI: magnet link OR direct https:// video URL */
+  uri: string
+  /** Optional additional URIs to try if the first one fails */
+  fallbackUris?: string[]
   title: string
   onClose: () => void
 }
@@ -205,7 +208,7 @@ async function streamViaBlob(
   }
 }
 
-export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps) {
+export function TorrentPlayer({ uri, fallbackUris = [], title, onClose }: TorrentPlayerProps) {
   const videoRef     = useRef<HTMLVideoElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const clientRef    = useRef<any>(null)
@@ -219,10 +222,16 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
 
   // Manual retry: incrementar para forçar re-execução do effect
   const [retryKey, setRetryKey] = useState(0)
+  // Which URI in [uri, ...fallbackUris] we're currently trying
+  const [uriIndex, setUriIndex] = useState(0)
 
-  const statsIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null)
-  const peerTimeoutRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const statusTimersRef   = useRef<ReturnType<typeof setTimeout>[]>([])
+  const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const peerTimeoutRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const statusTimersRef  = useRef<ReturnType<typeof setTimeout>[]>([])
+
+  // All URIs in priority order
+  const allUris = [uri, ...fallbackUris].filter(Boolean)
+  const currentUri = allUris[uriIndex] ?? uri
 
   useEffect(() => {
     destroyedRef.current = false
@@ -234,7 +243,69 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
     setStats(null)
     setConnectMsg(pickRandom(CONNECTING_MSGS))
 
+    const showUriError = (msg: string) => {
+      const hasMore = uriIndex < allUris.length - 1
+      if (hasMore) {
+        // Auto-switch to next URI
+        const nextIndex = uriIndex + 1
+        const nextUri = allUris[nextIndex]
+        const isNextMagnet = nextUri?.startsWith('magnet:')
+        setConnectMsg(`Tentando link alternativo${isNextMagnet ? ' (torrent)' : ''}…`)
+        setTimeout(() => {
+          if (!isDestroyed()) setUriIndex(nextIndex)
+        }, 1500)
+      } else {
+        setPhase('error')
+        setErrorMsg(msg)
+      }
+    }
+
     const start = async (attempt: number) => {
+      const activeUri = currentUri
+      if (!activeUri) {
+        setPhase('error')
+        setErrorMsg('Nenhum link de reprodução disponível.')
+        return
+      }
+
+      // ── Direct HTTP/HTTPS video URL ─────────────────────────────────────────
+      // Se não é magnet, tenta reproduzir diretamente no elemento <video>.
+      // Isso funciona para URLs .mp4, .webm, .m3u8 (HLS — nativo no Safari/iOS),
+      // e qualquer outro stream HTTP suportado pelo navegador.
+      if (!activeUri.startsWith('magnet:')) {
+        const video = videoRef.current
+        if (!video || isDestroyed()) return
+
+        setConnectMsg('Conectando ao servidor de stream…')
+
+        let resolved = false
+        const onCanPlay = () => {
+          if (isDestroyed() || resolved) return
+          resolved = true
+          setPhase('playing')
+          video.play().catch(() => {})
+        }
+        const onVideoError = () => {
+          if (isDestroyed() || resolved) return
+          resolved = true
+          const code = video.error?.code ?? 0
+          const msgs: Record<number, string> = {
+            1: 'Reprodução interrompida pelo usuário.',
+            2: 'Erro de rede ao carregar o vídeo.',
+            3: 'Erro de decodificação — formato não suportado neste dispositivo.',
+            4: 'Formato de vídeo não suportado ou URL inválida.',
+          }
+          showUriError(msgs[code] ?? `Erro ao carregar o vídeo (código ${code}).`)
+        }
+
+        video.addEventListener('canplay', onCanPlay, { once: true })
+        video.addEventListener('error', onVideoError, { once: true })
+        video.src = activeUri
+        video.load()
+        return
+      }
+
+      // ── WebTorrent (magnet URI) ─────────────────────────────────────────────
       try {
         const { default: WebTorrent } = await import('webtorrent')
         if (isDestroyed()) return
@@ -244,7 +315,7 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
         const wssTrackers = allTrackers.filter(t => t.startsWith('wss://'))
 
         // Build full magnet appending any tracker not already present
-        let fullMagnet = magnetUri
+        let fullMagnet = activeUri
         for (const tr of allTrackers) {
           if (!fullMagnet.includes(encodeURIComponent(tr)) && !fullMagnet.includes(tr)) {
             fullMagnet += `&tr=${encodeURIComponent(tr)}`
@@ -256,8 +327,7 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
         const announceList = [...new Set([...wssTrackers, ...magnetWss])]
 
         if (announceList.length === 0) {
-          setPhase('error')
-          setErrorMsg(
+          showUriError(
             'Nenhum tracker WebSocket (wss://) encontrado. ' +
             'O browser usa WebRTC — adicione trackers wss:// em Configurações → Trackers.'
           )
@@ -272,7 +342,7 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
         clientRef.current = client
 
         client.on('error', (err: unknown) => {
-          if (!isDestroyed()) { setPhase('error'); setErrorMsg(String(err)) }
+          if (!isDestroyed()) showUriError(String(err))
         })
 
         // Pass trackers both in magnet URI and explicitly via announce
@@ -308,15 +378,15 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
             setConnectMsg(`Reconectando… (tentativa ${nextAttempt + 1} de ${MAX_AUTO_RETRIES + 1})`)
             start(nextAttempt)
           } else {
-            // Esgotou todas as tentativas
-            setPhase('error')
-            setErrorMsg(
+            const hasMore = uriIndex < allUris.length - 1
+            const nextIsHttp = hasMore && !allUris[uriIndex + 1]?.startsWith('magnet:')
+            showUriError(
               'Nenhum peer WebRTC encontrado após múltiplas tentativas.\n\n' +
               'Possíveis causas:\n' +
               '• O torrent não tem seeders com suporte a WebRTC (necessário para browser)\n' +
               '• Sua rede bloqueia WebRTC (tente em outra rede ou Wi-Fi)\n' +
-              '• Todos os trackers wss:// estão fora do ar\n\n' +
-              'Dica: use o app desktop (lock-app) para torrents sem suporte WebRTC.'
+              '• Todos os trackers wss:// estão fora do ar\n' +
+              (nextIsHttp ? '\n→ Tentando link de stream alternativo…' : '\nDica: use o app desktop para torrents sem suporte WebRTC.')
             )
           }
         }, ATTEMPT_TIMEOUT_MS)
@@ -326,15 +396,13 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
         })
 
         torrent.on('error', (err: unknown) => {
-          if (!isDestroyed()) { setPhase('error'); setErrorMsg(String(err)) }
+          if (!isDestroyed()) showUriError(String(err))
         })
 
-        // Update connecting message when tracker announces
         torrent.on('trackerAnnounce', () => {
           if (!isDestroyed()) setConnectMsg('Tracker conectado — procurando peers WebRTC…')
         })
 
-        // Show peer count as soon as first peer connects
         torrent.on('wire', () => {
           if (!isDestroyed()) setConnectMsg('Peer encontrado! Baixando metadados…')
         })
@@ -352,8 +420,7 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
             .sort((a, b) => b.length - a.length)[0]
 
           if (!file) {
-            setPhase('error')
-            setErrorMsg('Nenhum arquivo de vídeo encontrado neste torrent.')
+            showUriError('Nenhum arquivo de vídeo encontrado neste torrent.')
             return
           }
 
@@ -384,7 +451,6 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
               await streamViaMSE(file, mseType, video, isDestroyed, onPlaying)
             } catch {
               if (!isDestroyed()) {
-                // Limpa qualquer erro do MSE antes do fallback
                 video.removeAttribute('src')
                 video.load()
                 await streamViaBlob(file, video, isDestroyed, onPlaying, onError)
@@ -397,8 +463,7 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
 
       } catch (err) {
         if (!destroyedRef.current) {
-          setPhase('error')
-          setErrorMsg(`Erro ao inicializar WebTorrent: ${String(err)}`)
+          showUriError(`Erro ao inicializar WebTorrent: ${String(err)}`)
         }
       }
     }
@@ -413,9 +478,10 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
       clientRef.current?.destroy()
       clientRef.current = null
     }
-  }, [magnetUri, retryKey])
+  }, [uri, retryKey, uriIndex]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRetry = () => {
+    setUriIndex(0)
     setRetryKey(k => k + 1)
   }
 

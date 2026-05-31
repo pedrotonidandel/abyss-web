@@ -5,7 +5,8 @@ interface WatchOptionsSheetProps {
   title: string
   streamingServices: StreamingProvider[]
   trailerUrl: string | null
-  magnetUri?: string | null       // main magnet (movie/season pack)
+  /** Primary URI — can be a magnet link or a direct https:// stream URL */
+  magnetUri?: string | null
   onStream?: (uri: string) => void // callback to open TorrentPlayer
   onClose: () => void
 }
@@ -14,6 +15,7 @@ export function WatchOptionsSheet({
   title, streamingServices, trailerUrl, magnetUri, onStream, onClose
 }: WatchOptionsSheetProps) {
   const hasOptions = streamingServices.length > 0 || magnetUri || trailerUrl
+  const isMagnet = magnetUri?.startsWith('magnet:')
 
   return (
     <>
@@ -95,11 +97,11 @@ export function WatchOptionsSheet({
             </div>
           )}
 
-          {/* Torrent stream */}
+          {/* Stream button — works for both magnet links and direct video URLs */}
           {magnetUri && onStream && (
             <div>
               <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--lv-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '0 0 12px' }}>
-                Via torrent
+                {isMagnet ? 'Via torrent' : 'Stream direto'}
               </p>
               <button
                 onClick={() => { onStream(magnetUri); onClose() }}
@@ -115,8 +117,12 @@ export function WatchOptionsSheet({
                   <Play size={18} fill="#0d111a" style={{ color: '#0d111a', marginLeft: 2 }} />
                 </div>
                 <div style={{ textAlign: 'left' }}>
-                  <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--brand-yellow)', margin: 0 }}>Reproduzir via torrent</p>
-                  <p style={{ fontSize: 11, color: 'var(--lv-muted)', margin: '2px 0 0' }}>Transmite enquanto baixa</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--brand-yellow)', margin: 0 }}>
+                    {isMagnet ? 'Reproduzir via torrent' : 'Reproduzir stream'}
+                  </p>
+                  <p style={{ fontSize: 11, color: 'var(--lv-muted)', margin: '2px 0 0' }}>
+                    {isMagnet ? 'Transmite enquanto baixa' : 'Reprodução direta via link'}
+                  </p>
                 </div>
               </button>
             </div>

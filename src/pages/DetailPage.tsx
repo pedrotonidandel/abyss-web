@@ -94,7 +94,7 @@ function SeriesEpisodesSection({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {currentSeason.episodes.map((ep, epIdx) => {
           const tmdbEp = getTmdbEp(selectedSeason, epIdx)
-          const hasStream = ep.uri?.startsWith('magnet:')
+          const hasStream = !!(ep.uri && ep.uri.length > 0)
           const displayTitle = ep.title.replace(/^Ep \d+ — /, '')
 
           return (
@@ -277,7 +277,7 @@ export function DetailPage({ item, source, onClose }: DetailPageProps) {
             <MoreVertical size={18} style={{ color: '#fff' }} />
           </button>
 
-          {/* Play button — opens where-to-watch sheet */}
+          {/* Play button — abre sheet de opções de onde assistir */}
           <button
             onClick={() => setWatchOpen(true)}
             style={{
@@ -375,10 +375,10 @@ export function DetailPage({ item, source, onClose }: DetailPageProps) {
 
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
-            {(item.uris?.[0]?.startsWith('magnet:') || item.seasons?.some(s => s.uri?.startsWith('magnet:'))) && (
+            {(item.uris?.length > 0 || item.seasons?.some(s => s.uri)) && (
               <button
                 onClick={() => {
-                  const uri = item.uris?.[0] ?? item.seasons?.find(s => s.uri?.startsWith('magnet:'))?.uri ?? ''
+                  const uri = item.uris?.[0] ?? item.seasons?.find(s => s.uri)?.uri ?? ''
                   setStreamUri(uri)
                 }}
                 style={{
@@ -604,7 +604,8 @@ export function DetailPage({ item, source, onClose }: DetailPageProps) {
 
       {streamUri && (
         <TorrentPlayer
-          magnetUri={streamUri}
+          uri={streamUri}
+          fallbackUris={item.uris?.filter(u => u !== streamUri) ?? []}
           title={title}
           onClose={() => setStreamUri(null)}
         />

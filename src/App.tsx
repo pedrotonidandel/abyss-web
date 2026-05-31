@@ -165,9 +165,11 @@ export default function App() {
         {/* Mobile wordmark header */}
         {!detailItem && (
           <div
-            className="shrink-0 md:hidden flex items-center px-5"
+            className="shrink-0 md:hidden flex items-end px-5"
             style={{
-              height: 48,
+              paddingTop: 'env(safe-area-inset-top, 0px)',
+              paddingBottom: 12,
+              minHeight: 48,
               background: 'var(--panel)',
               borderBottom: '1px solid var(--divider)',
             }}
@@ -189,8 +191,16 @@ export default function App() {
         {/* ── Tablet header: user dropdown + notifications (md only, hidden on home page) ── */}
         {!detailItem && page !== 'home' && (
           <div
-            className="hidden md:flex shrink-0 items-center justify-end"
-            style={{ height: 52, padding: '0 16px', borderBottom: '1px solid var(--divider)', gap: 8 }}
+            className="hidden md:flex shrink-0 items-end justify-end"
+            style={{
+              paddingTop: 'env(safe-area-inset-top, 0px)',
+              paddingBottom: 8,
+              paddingLeft: 16,
+              paddingRight: 16,
+              minHeight: 52,
+              borderBottom: '1px solid var(--divider)',
+              gap: 8,
+            }}
           >
             {/* Notification bell */}
             <button

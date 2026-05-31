@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { Settings, Wifi, Bell, Trophy, Shield, Package } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { api } from '../api'
@@ -95,12 +95,20 @@ function TrackersSection() {
   const [trackers, setTrackers] = useState<string[]>(() => localTrackerStore.get())
   const [inject, setInject]     = useState(() => trackers.length > 0)
   const [text, setText]         = useState(() => trackers.join('\n'))
+  const [saved, setSaved]       = useState(false)
+  const savedTimerRef           = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleApply = () => {
     const list = text.split('\n').map(s => s.trim()).filter(Boolean)
     localTrackerStore.set(list)
     setTrackers(list)
+    setSaved(true)
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
+    savedTimerRef.current = setTimeout(() => setSaved(false), 2500)
   }
+
+  const wssCount = text.split('\n').filter(s => s.trim().startsWith('wss://')).length
+  const totalCount = text.split('\n').filter(s => s.trim()).length
 
   return (
     <div>
@@ -116,9 +124,9 @@ function TrackersSection() {
         <div style={{ marginTop: 16 }}>
           <textarea
             value={text}
-            onChange={e => setText(e.target.value)}
+            onChange={e => { setText(e.target.value); setSaved(false) }}
             rows={6}
-            placeholder={'udp://tracker.example.com:6969/announce\nudp://tracker2.example.com:1337/announce'}
+            placeholder={'wss://tracker.btorrent.xyz:443\nudp://tracker.opentrackr.org:1337/announce'}
             style={{
               ...inputStyle,
               resize: 'vertical', lineHeight: 1.6,
@@ -130,16 +138,22 @@ function TrackersSection() {
               onClick={handleApply}
               style={{
                 padding: '8px 20px', borderRadius: 8, border: 'none',
-                background: 'var(--brand-yellow)', color: '#0d111a',
-                fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                background: saved ? '#22c55e' : 'var(--brand-yellow)',
+                color: '#0d111a', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                transition: 'background 0.2s',
+                display: 'flex', alignItems: 'center', gap: 6,
               }}
             >
-              Aplicar
+              {saved ? '✓ Salvo' : 'Aplicar'}
             </button>
             <span style={{ fontSize: 12, color: 'var(--lv-muted)' }}>
-              {text.split('\n').filter(s => s.trim()).length} tracker(s) configurado(s)
+              {totalCount} tracker(s)
+              {wssCount > 0 && <span style={{ color: '#22c55e', marginLeft: 4 }}>· {wssCount} wss:// (ativos no browser)</span>}
             </span>
           </div>
+          <p style={{ fontSize: 11, color: 'oklch(0.45 0.01 240)', marginTop: 8, lineHeight: 1.5 }}>
+            Apenas trackers <strong>wss://</strong> funcionam no browser (WebRTC). Trackers udp:// e http:// são usados somente no app desktop.
+          </p>
         </div>
       )}
     </div>

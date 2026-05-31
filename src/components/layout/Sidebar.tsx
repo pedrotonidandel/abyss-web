@@ -57,8 +57,11 @@ export function Sidebar({ activePage, onNavigate, onBugReport, onSuggestion }: P
         overflow: 'hidden', position: 'relative',
       }}
     >
-      {/* ── Wordmark ── */}
-      <div style={{ padding: '20px 20px 20px' }}>
+      {/* ── Wordmark — padding-top respects safe-area (iPad Stage Manager / notch) ── */}
+      <div style={{
+        paddingTop: 'max(env(safe-area-inset-top, 0px), 20px)',
+        paddingLeft: 20, paddingRight: 20, paddingBottom: 20,
+      }}>
         <span style={{
           fontFamily: "'Poppins', sans-serif",
           fontWeight: 700, fontSize: 22,

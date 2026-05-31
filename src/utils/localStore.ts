@@ -25,23 +25,39 @@ export const localMagnetStore = {
   remove: (key: string) => localStorage.removeItem(`abyss.magnet.${key}`),
 }
 
-// Public WSS trackers that support WebTorrent (WebRTC) out of the box.
-// Used as defaults when the user hasn't configured any custom trackers.
-const DEFAULT_WSS_TRACKERS = [
+// Default tracker list — hardcoded fallback when user has no custom trackers.
+// Browser WebRTC only connects via wss:// trackers; udp:// and http:// are
+// silently ignored in the browser but kept here for completeness (the lock-app
+// Electron build can use them via native BitTorrent).
+const DEFAULT_TRACKERS = [
+  // ── WebSocket trackers (wss://) — work in browser + Electron ──────────────
   'wss://tracker.btorrent.xyz',
+  'wss://tracker.btorrent.xyz:443',
   'wss://tracker.openwebtorrent.com',
   'wss://tracker.webtorrent.dev',
+  // ── UDP trackers — work in Electron only ──────────────────────────────────
+  'udp://tracker.opentrackr.org:1337/announce',
+  // ── HTTP trackers — work in Electron only ─────────────────────────────────
+  'http://retracker.krs-ix.ru/announce',
+  'http://retracker.krs-ix.ru:80/announce',
+  'http://secure.pow7.com/announce',
+  'http://t1.pow7.com/announce',
+  'http://t2.pow7.com/announce',
+  'http://thetracker.org:80/announce',
+  'http://torrent.gresille.org/announce',
+  'http://torrentsmd.com:8080/announce',
+  'http://tracker.aletorrenty.pl:2710/announce',
 ]
 
 // Custom tracker list (appended to every torrent started by the PWA).
-// Falls back to DEFAULT_WSS_TRACKERS so torrents work without manual setup.
+// Falls back to DEFAULT_TRACKERS so torrents work without manual setup.
 export const localTrackerStore = {
   get: (): string[] => {
     try {
       const raw = localStorage.getItem('abyss.customTrackers')
-      return raw ? (JSON.parse(raw) as string[]) : DEFAULT_WSS_TRACKERS
-    } catch { return DEFAULT_WSS_TRACKERS }
+      return raw ? (JSON.parse(raw) as string[]) : DEFAULT_TRACKERS
+    } catch { return DEFAULT_TRACKERS }
   },
   set: (trackers: string[]) => localStorage.setItem('abyss.customTrackers', JSON.stringify(trackers)),
-  defaults: DEFAULT_WSS_TRACKERS,
+  defaults: DEFAULT_TRACKERS,
 }

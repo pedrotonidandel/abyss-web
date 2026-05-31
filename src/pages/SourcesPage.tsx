@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { ArrowLeft, Plus, Trash2, Link, Upload, RefreshCw, Package } from 'lucide-react'
+import { Plus, Trash2, Link, Upload, RefreshCw, Package } from 'lucide-react'
 import { useAppStore } from '../store/useAppStore'
 import { api } from '../api'
 import { localAddonStore, localAddonUrlStore } from '../utils/localStore'
@@ -21,10 +21,10 @@ function parseAddonJson(json: unknown): DownloadItem[] {
 }
 
 interface SourcesPageProps {
-  onBack: () => void
+  onBack?: () => void
 }
 
-export function SourcesPage({ onBack }: SourcesPageProps) {
+export function SourcesPage({ onBack: _onBack }: SourcesPageProps) {
   const { sources, setSources } = useAppStore()
   const [url, setUrl]           = useState('')
   const [category, setCategory] = useState<ContentCategory>('movies')
@@ -147,10 +147,6 @@ export function SourcesPage({ onBack }: SourcesPageProps) {
       {/* Header */}
       <div className="shrink-0 flex items-center gap-3 px-4 py-3"
         style={{ borderBottom: '1px solid var(--divider)', background: 'var(--panel)' }}>
-        <button onClick={onBack} className="p-2 rounded-full"
-          style={{ background: 'var(--chip)', border: '1px solid var(--divider)' }}>
-          <ArrowLeft size={18} style={{ color: 'var(--lv-text)' }} />
-        </button>
         <div>
           <h2 className="text-base font-bold" style={{ color: 'var(--lv-text)' }}>Addons</h2>
           <p className="text-xs" style={{ color: 'var(--lv-muted)' }}>{sources.length} fonte{sources.length !== 1 ? 's' : ''} ativa{sources.length !== 1 ? 's' : ''}</p>

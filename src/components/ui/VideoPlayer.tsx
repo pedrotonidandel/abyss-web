@@ -234,10 +234,14 @@ export function VideoPlayer({
         data-controls
         style={{
           position: 'absolute', top: 0, left: 0, right: 0,
-          padding: 'env(safe-area-inset-top, 0px) 16px 20px',
+          // safe-area-inset-top: accounts for notch, status bar, and iPad Stage Manager title bar
+          // safe-area-inset-left/right: accounts for iPad landscape notch area
+          paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)',
+          paddingLeft: 'max(env(safe-area-inset-left, 0px), 16px)',
+          paddingRight: 'max(env(safe-area-inset-right, 0px), 16px)',
+          paddingBottom: 20,
           background: 'linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, transparent 100%)',
           display: 'flex', alignItems: 'flex-end', gap: 12,
-          paddingTop: `max(env(safe-area-inset-top, 0px), 12px)`,
           transition: 'opacity 0.3s',
           opacity: (phase !== 'playing' || controlsVisible) ? 1 : 0,
           pointerEvents: (phase !== 'playing' || controlsVisible) ? 'auto' : 'none',
@@ -385,6 +389,8 @@ export function VideoPlayer({
           style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
             paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)',
+            paddingLeft: 'env(safe-area-inset-left, 0px)',
+            paddingRight: 'env(safe-area-inset-right, 0px)',
             background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%)',
             transition: 'opacity 0.3s',
             opacity: controlsVisible ? 1 : 0,

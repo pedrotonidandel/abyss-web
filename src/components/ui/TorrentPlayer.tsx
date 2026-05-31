@@ -26,7 +26,6 @@ const CONNECTING_MSGS = [
   'Chamando reforços da rede…',
   'Vasculhando a matrix em busca de peers…',
 ]
-
 const BUFFERING_MSGS = [
   'Carregando o conteúdo…',
   'Juntando os pedaços do puzzle…',
@@ -44,7 +43,11 @@ function extractWssTrackers(magnet: string): string[] {
     .filter(t => t.startsWith('wss://'))
 }
 
-/** Returns the best MSE mime type for the file name, or null if unsupported. */
+/**
+ * MSE só funciona de forma confiável para WebM (formato de streaming nativo).
+ * MP4 regular não é fMP4 (fragmented), então MSE falha com MEDIA_ERR_SRC_NOT_SUPPORTED.
+ * Para MP4/MKV/outros usamos blob após download completo.
+ */
 function getMseType(name: string): string | null {
   if (typeof MediaSource === 'undefined') return null
   if (/\.webm$/i.test(name)) {
@@ -53,26 +56,41 @@ function getMseType(name: string): string | null {
         .find(t => MediaSource.isTypeSupported(t)) ?? null
     )
   }
-  if (/\.(mp4|m4v)$/i.test(name)) {
-    return (
-      [
-        'video/mp4; codecs="avc1.42E01E,mp4a.40.2"',
-        'video/mp4; codecs="avc1.64001E,mp4a.40.2"',
-        'video/mp4; codecs="avc1.42E01E"',
-        'video/mp4',
-      ].find(t => MediaSource.isTypeSupported(t)) ?? null
-    )
-  }
-  if (/\.ts$/i.test(name)) {
-    return MediaSource.isTypeSupported('video/mp2t') ? 'video/mp2t' : null
-  }
   return null
 }
 
-/**
- * Stream file into a MediaSource. Feeds chunks as they arrive from the torrent.
- * Evicts old buffered data so we never exhaust the SourceBuffer quota on large files.
- */
+// ICE servers: STUN + TURN públicos para máxima conectividade.
+// TURN é essencial em redes com NAT simétrico (maioria dos celulares/3G/4G/5G).
+const ICE_SERVERS: RTCIceServer[] = [
+  // Google STUN
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
+  // Cloudflare STUN
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  // Twilio STUN
+  { urls: 'stun:global.stun.twilio.com:3478' },
+  // OpenRelay TURN público (metered.ca) — permite conexão mesmo atrás de NAT simétrico
+  { urls: 'stun:openrelay.metered.ca:80' },
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+]
+
 async function streamViaMSE(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   file: any,
@@ -91,14 +109,11 @@ async function streamViaMSE(
         let sb: SourceBuffer
         try {
           sb = ms.addSourceBuffer(mimeType)
-        } catch (e) {
-          reject(e); return
-        }
+        } catch (e) { reject(e); return }
 
         const waitUpdate = () =>
           new Promise<void>(r => sb.addEventListener('updateend', () => r(), { once: true }))
 
-        // Remove stale data from the beginning of the buffer to avoid QuotaExceededError
         const evictOld = async () => {
           if (sb.updating) await waitUpdate()
           const evictTo = Math.max(0, video.currentTime - 45)
@@ -112,42 +127,28 @@ async function streamViaMSE(
         }, { once: true })
 
         const reader = (file.stream() as ReadableStream<Uint8Array>).getReader()
-
         try {
           while (true) {
             if (isDestroyed()) { reader.cancel(); break }
-
             const { done, value } = await reader.read()
             if (done) {
-              // Drain any pending update, then signal end of stream
               if (sb.updating) await waitUpdate()
               if (ms.readyState === 'open') ms.endOfStream()
-              resolve()
-              break
+              resolve(); break
             }
-
-            // Wait if previous append is still in progress
             if (sb.updating) await waitUpdate()
-
-            // Try appending; on quota error, evict old data and retry
             try {
-              sb.appendBuffer(value)
-              await waitUpdate()
+              sb.appendBuffer(value); await waitUpdate()
             } catch (e) {
               if ((e as DOMException).name === 'QuotaExceededError') {
                 await evictOld()
                 if (sb.updating) await waitUpdate()
-                try { sb.appendBuffer(value); await waitUpdate() } catch { /* skip chunk */ }
-              } else {
-                reject(e); return
-              }
+                try { sb.appendBuffer(value); await waitUpdate() } catch { /* skip */ }
+              } else { reject(e); return }
             }
           }
-        } catch (e) {
-          reject(e)
-        }
+        } catch (e) { reject(e) }
       }, { once: true })
-
       ms.addEventListener('error', () => reject(new Error('MediaSource error')), { once: true })
     })
   } finally {
@@ -155,11 +156,6 @@ async function streamViaMSE(
   }
 }
 
-/**
- * Fallback: collect all chunks from the stream into a Blob, then play.
- * Updates download progress via onProgress callback.
- * Safe for formats not supported by MSE (MKV, AVI…).
- */
 async function streamViaBlob(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   file: any,
@@ -171,7 +167,6 @@ async function streamViaBlob(
   const chunks: Uint8Array[] = []
   const reader = (file.stream() as ReadableStream<Uint8Array>).getReader()
   let blobURL: string | null = null
-
   try {
     while (true) {
       if (isDestroyed()) { reader.cancel(); return }
@@ -180,12 +175,9 @@ async function streamViaBlob(
       chunks.push(value)
     }
     if (isDestroyed()) return
-
-    const mimeType = file.type || 'video/mp4'
-    const blob = new Blob(chunks, { type: mimeType })
+    const blob = new Blob(chunks, { type: file.type || 'video/mp4' })
     blobURL = URL.createObjectURL(blob)
     video.src = blobURL
-
     await video.play()
     onPlaying()
   } catch (e) {
@@ -195,15 +187,18 @@ async function streamViaBlob(
 }
 
 export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const videoRef    = useRef<HTMLVideoElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const clientRef = useRef<any>(null)
+  const clientRef   = useRef<any>(null)
   const destroyedRef = useRef(false)
-  const [phase, setPhase] = useState<Phase>('connecting')
+
+  const [phase, setPhase]       = useState<Phase>('connecting')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [stats, setStats] = useState<TorrentStats | null>(null)
-  const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const peerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [stats, setStats]       = useState<TorrentStats | null>(null)
+  const [connectMsg, setConnectMsg] = useState(connectingMsg)
+
+  const statsIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null)
+  const peerTimeoutRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     destroyedRef.current = false
@@ -214,36 +209,34 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
         const { default: WebTorrent } = await import('webtorrent')
         if (isDestroyed()) return
 
-        // Build magnet with custom wss:// trackers
-        const customTrackers = localTrackerStore.get()
+        // Collect all wss:// trackers (custom + defaults)
+        const allTrackers = localTrackerStore.get()
+        const wssTrackers = allTrackers.filter(t => t.startsWith('wss://'))
+
+        // Build full magnet appending any tracker not already present
         let fullMagnet = magnetUri
-        for (const tr of customTrackers) {
-          if (!fullMagnet.includes(encodeURIComponent(tr))) {
+        for (const tr of allTrackers) {
+          if (!fullMagnet.includes(encodeURIComponent(tr)) && !fullMagnet.includes(tr)) {
             fullMagnet += `&tr=${encodeURIComponent(tr)}`
           }
         }
 
-        const wssTrackers = extractWssTrackers(fullMagnet)
-        if (wssTrackers.length === 0) {
+        // Also collect wss:// trackers already embedded in the magnet
+        const magnetWss = extractWssTrackers(fullMagnet)
+        const announceList = [...new Set([...wssTrackers, ...magnetWss])]
+
+        if (announceList.length === 0) {
           setPhase('error')
           setErrorMsg(
-            'Nenhum tracker WebSocket (wss://) encontrado neste magnet. ' +
-            'O browser usa WebRTC — trackers udp:// e http:// não funcionam. ' +
-            'Adicione um tracker WSS em Configurações → Trackers (ex: wss://tracker.btorrent.xyz).'
+            'Nenhum tracker WebSocket (wss://) encontrado. ' +
+            'O browser usa WebRTC — adicione trackers wss:// em Configurações → Trackers.'
           )
           return
         }
 
         const client = new WebTorrent({
           tracker: {
-            rtcConfig: {
-              iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:global.stun.twilio.com:3478' },
-                { urls: 'stun:stun.cloudflare.com:3478' },
-              ],
-            },
+            rtcConfig: { iceServers: ICE_SERVERS },
           },
         })
         clientRef.current = client
@@ -252,28 +245,60 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
           if (!isDestroyed()) { setPhase('error'); setErrorMsg(String(err)) }
         })
 
+        // Pass trackers both in magnet URI and explicitly via announce
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const torrent = client.add(fullMagnet) as any
+        const torrent = client.add(fullMagnet, { announce: announceList } as any)
 
-        // No-peers timeout after 30s
+        // Progressive status messages while searching for peers
+        const statusTimers = [
+          setTimeout(() => { if (!isDestroyed() && phase !== 'buffering' && phase !== 'playing') setConnectMsg('Conectando aos trackers WSS…') }, 5000),
+          setTimeout(() => { if (!isDestroyed() && phase !== 'buffering' && phase !== 'playing') setConnectMsg('Aguardando peers WebRTC… (pode demorar em redes móveis)') }, 15000),
+          setTimeout(() => { if (!isDestroyed() && phase !== 'buffering' && phase !== 'playing') setConnectMsg('Ainda tentando… verifique se o conteúdo tem seeders WebRTC') }, 35000),
+          setTimeout(() => { if (!isDestroyed() && phase !== 'buffering' && phase !== 'playing') setConnectMsg('Última tentativa via TURN relay…') }, 55000),
+        ]
+
+        // Generous 90-second timeout — TURN relay pode precisar de mais tempo
         peerTimeoutRef.current = setTimeout(() => {
           if (isDestroyed() || torrent.numPeers > 0 || torrent.downloaded > 0) return
+          statusTimers.forEach(clearTimeout)
           setPhase('error')
           setErrorMsg(
-            'Nenhum peer encontrado em 30 segundos. ' +
-            'Verifique se o torrent tem seeders ativos ou adicione mais trackers nas Configurações.'
+            'Nenhum peer WebRTC encontrado em 90 segundos.\n\n' +
+            'Causas possíveis:\n' +
+            '• O torrent não tem seeders com suporte a WebRTC (necessário para browser)\n' +
+            '• Rede muito restritiva bloqueando WebRTC (tente em outra rede)\n' +
+            '• Todos os trackers wss:// estão offline\n\n' +
+            `Trackers tentados: ${announceList.join(', ')}`
           )
-        }, 30000)
+        }, 90000)
+
+        torrent.on('warning', (warn: unknown) => {
+          console.warn('[TorrentPlayer] warning:', warn)
+        })
 
         torrent.on('error', (err: unknown) => {
           if (!isDestroyed()) { setPhase('error'); setErrorMsg(String(err)) }
         })
 
+        // Update connecting message when tracker announces
+        torrent.on('trackerAnnounce', () => {
+          if (!isDestroyed() && phase === 'connecting') {
+            setConnectMsg('Tracker conectado — procurando peers WebRTC…')
+          }
+        })
+
+        // Show peer count as soon as first peer connects
+        torrent.on('wire', () => {
+          if (!isDestroyed() && phase === 'connecting') {
+            setConnectMsg('Peer encontrado! Baixando metadados…')
+          }
+        })
+
         torrent.on('ready', async () => {
-          if (peerTimeoutRef.current) clearTimeout(peerTimeoutRef.current)
+          peerTimeoutRef.current && clearTimeout(peerTimeoutRef.current)
+          statusTimers.forEach(clearTimeout)
           if (isDestroyed() || !videoRef.current) return
 
-          // Pick the largest video file
           const videoExts = /\.(mp4|webm|mkv|avi|mov|m4v|ts|m2ts)$/i
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const files: any[] = [...torrent.files]
@@ -287,40 +312,40 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
             return
           }
 
-          // Prioritize the chosen file
           for (const f of files) f.deselect()
           file.select()
 
           setPhase('buffering')
 
-          // Stats polling
           statsIntervalRef.current = setInterval(() => {
             if (!isDestroyed()) {
               setStats({
-                progress: torrent.progress,
+                progress:      torrent.progress,
                 downloadSpeed: torrent.downloadSpeed,
-                numPeers: torrent.numPeers,
-                downloaded: torrent.downloaded,
-                total: torrent.length,
+                numPeers:      torrent.numPeers,
+                downloaded:    torrent.downloaded,
+                total:         torrent.length,
               })
             }
           }, 1000)
 
-          const video = videoRef.current!
+          const video    = videoRef.current!
           const onPlaying = () => { if (!isDestroyed()) setPhase('playing') }
-          const onError = (msg: string) => { if (!isDestroyed()) { setPhase('error'); setErrorMsg(msg) } }
-
-          const mseType = getMseType(file.name)
+          const onError   = (msg: string) => { if (!isDestroyed()) { setPhase('error'); setErrorMsg(msg) } }
+          const mseType   = getMseType(file.name)
 
           if (mseType) {
             try {
               await streamViaMSE(file, mseType, video, isDestroyed, onPlaying)
             } catch {
-              // MSE failed (likely non-faststart MP4), fall back to blob
-              if (!isDestroyed()) await streamViaBlob(file, video, isDestroyed, onPlaying, onError)
+              if (!isDestroyed()) {
+                // Limpa qualquer erro do MSE antes do fallback
+                video.removeAttribute('src')
+                video.load()
+                await streamViaBlob(file, video, isDestroyed, onPlaying, onError)
+              }
             }
           } else {
-            // MKV, AVI, etc. — not MSE-compatible
             await streamViaBlob(file, video, isDestroyed, onPlaying, onError)
           }
         })
@@ -350,7 +375,7 @@ export function TorrentPlayer({ magnetUri, title, onClose }: TorrentPlayerProps)
       title={title}
       phase={phase}
       stats={stats}
-      connectingMsg={connectingMsg}
+      connectingMsg={connectMsg}
       bufferingMsg={bufferingMsg}
       errorMsg={errorMsg}
       onClose={onClose}

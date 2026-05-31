@@ -12,6 +12,13 @@ interface TorrentPlayerProps {
   onClose: () => void
 }
 
+// Subset of the lock-app preload API that TorrentPlayer uses.
+// Only present when the PWA is running inside the Electron shell.
+interface LockAppStreamAPI {
+  startStream: (magnetUri: string) => Promise<{ url: string; fileName: string; duration: number }>
+  stopStream: () => void
+}
+
 interface TorrentStats {
   progress: number
   downloadSpeed: number
@@ -226,10 +233,16 @@ export function TorrentPlayer({ uri, fallbackUris = [], title, onClose }: Torren
   // Which URI in [uri, ...fallbackUris] we're currently trying
   const [uriIndex, setUriIndex] = useState(0)
 
-  const statsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const peerTimeoutRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const statusTimersRef  = useRef<ReturnType<typeof setTimeout>[]>([])
-  const rdAbortRef       = useRef<AbortController | null>(null)
+  const statsIntervalRef       = useRef<ReturnType<typeof setInterval> | null>(null)
+  const peerTimeoutRef         = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const statusTimersRef        = useRef<ReturnType<typeof setTimeout>[]>([])
+  const rdAbortRef             = useRef<AbortController | null>(null)
+  const electronStreamActiveRef = useRef(false)
+
+  /** lock-app preload API — only available when running inside Electron */
+  const lockApp = (window as unknown as { api?: LockAppStreamAPI }).api?.startStream
+    ? (window as unknown as { api: LockAppStreamAPI }).api
+    : null
 
   // All URIs in priority order
   const allUris = [uri, ...fallbackUris].filter(Boolean)
@@ -305,6 +318,57 @@ export function TorrentPlayer({ uri, fallbackUris = [], title, onClose }: Torren
         video.src = activeUri
         video.load()
         return
+      }
+
+      // ── Electron / lock-app streaming (prioridade máxima) ─────────────────
+      // Quando rodando dentro do lock-app, usa o servidor local que já existe
+      // (WebTorrent Node.js com UDP/TCP real + FFmpeg). Igual ao modelo Stremio.
+      // Vantagens: conecta a TODOS os seeders (não só WebRTC), transcodifica
+      // áudio (AC-3/DTS → AAC), HTTP range requests para seek correto.
+      if (lockApp) {
+        try {
+          setConnectMsg('Conectando ao servidor local (lock-app)…')
+          statusTimersRef.current = [
+            setTimeout(() => { if (!isDestroyed()) setConnectMsg('Aguardando metadados do torrent…') }, 5_000),
+            setTimeout(() => { if (!isDestroyed()) setConnectMsg('Conectando com seeders via DHT/UDP…') }, 18_000),
+            setTimeout(() => { if (!isDestroyed()) setConnectMsg('Quase lá — estabelecendo conexão P2P…') }, 35_000),
+          ]
+
+          // Race: 90s timeout para o caso do torrent nunca encontrar metadados
+          const streamResult = await Promise.race([
+            lockApp.startStream(activeUri),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Tempo esgotado aguardando metadados via lock-app.')), 90_000)
+            ),
+          ])
+          statusTimersRef.current.forEach(clearTimeout)
+
+          if (isDestroyed()) return
+
+          electronStreamActiveRef.current = true
+          const video = videoRef.current!
+          video.src = streamResult.url
+
+          const onCanPlay = () => {
+            if (!isDestroyed()) { setPhase('playing'); video.play().catch(() => {}) }
+          }
+          const onVideoError = () => {
+            if (!isDestroyed()) {
+              const code = video.error?.code ?? 0
+              showUriError(`Erro no stream local (código ${code}). Tente novamente.`)
+            }
+          }
+          video.addEventListener('canplay', onCanPlay, { once: true })
+          video.addEventListener('error', onVideoError, { once: true })
+          return  // ← pronto; não precisa de RD nem WebRTC
+        } catch (err) {
+          statusTimersRef.current.forEach(clearTimeout)
+          if (isDestroyed()) return
+          // lock-app falhou — avisa e tenta RD/WebRTC
+          setConnectMsg(`lock-app: ${(err as Error).message}\nTentando outros métodos…`)
+          await new Promise(r => setTimeout(r, 1500))
+          if (isDestroyed()) return
+        }
       }
 
       // ── Real-Debrid (magnet → URL HTTP direta) ─────────────────────────────
@@ -527,6 +591,11 @@ export function TorrentPlayer({ uri, fallbackUris = [], title, onClose }: Torren
 
     return () => {
       destroyedRef.current = true
+      // Para o stream do lock-app (libera o servidor HTTP e o WebTorrent)
+      if (electronStreamActiveRef.current) {
+        lockApp?.stopStream()
+        electronStreamActiveRef.current = false
+      }
       rdAbortRef.current?.abort()
       rdAbortRef.current = null
       if (peerTimeoutRef.current) clearTimeout(peerTimeoutRef.current)

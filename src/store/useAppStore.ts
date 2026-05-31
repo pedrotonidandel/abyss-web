@@ -13,6 +13,8 @@ interface AppStore {
 
   setUser: (u: User | null) => void
   setSources: (s: Source[]) => void
+  /** Patch a single source by id — used when lazy-loading addon content */
+  patchSource: (id: string, patch: Partial<Source>) => void
   setLibrary: (l: LibraryItemServer[]) => void
   setActiveCategory: (cat: ContentCategory) => void
   setSearchQuery: (q: string) => void
@@ -33,6 +35,9 @@ export const useAppStore = create<AppStore>()((set) => ({
 
   setUser: (user) => set((s) => ({ user, recentlyVisited: user?.id !== s.user?.id ? [] : s.recentlyVisited })),
   setSources: (sources) => set({ sources }),
+  patchSource: (id, patch) => set((s) => ({
+    sources: s.sources.map(src => src.id === id ? { ...src, ...patch } : src),
+  })),
   setLibrary: (library) => set({ library }),
   setActiveCategory: (cat) => set({ activeCategory: cat, searchQuery: '' }),
   setSearchQuery: (q) => set({ searchQuery: q }),

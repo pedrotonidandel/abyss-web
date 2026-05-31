@@ -33,7 +33,7 @@ export default function App() {
   const [notifItems, setNotifItems] = useState<Array<{id: number; title: string; body: string|null; readAt: string|null; createdAt: string}>>([])
   const [pushGranted, setPushGranted] = useState(() => (typeof Notification !== 'undefined' ? Notification.permission === 'granted' : false))
 
-  const { setUser, setSources, setLibrary, sources, user } = useAppStore()
+  const { setUser, setSources, patchSource, setLibrary, sources, user } = useAppStore()
 
   const requestPushPermission = async () => {
     if (!('Notification' in window)) return
@@ -97,38 +97,79 @@ export default function App() {
 
   useEffect(() => { init() }, [])
 
-  const init = async () => {
-    const user = await api.auth.refresh()
-    if (!user) { setAppState('login'); return }
-    await loadUserData(user)
+  /** Wraps a promise with a hard timeout — rejects if it takes longer than `ms`. */
+  function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+    return Promise.race([
+      p,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms)
+      ),
+    ])
   }
 
-  const loadUserData = async (user: User) => {
-    setUser(user)
-    const [manifests, serverItems] = await Promise.all([api.sources.list(), api.library.list()])
-    const sources: Source[] = await Promise.all(
-      manifests.map(async (manifest) => {
-        const addonUrl = localAddonUrlStore.get(manifest.id) ?? manifest.url ?? null
-        if (addonUrl) {
-          try {
-            const res = await fetch(addonUrl)
-            const data = await res.json() as { downloads?: DownloadItem[] }
-            return { ...manifest, url: addonUrl, downloads: Array.isArray(data.downloads) ? data.downloads : [] }
-          } catch { return { ...manifest, url: addonUrl, downloads: [] } }
-        }
-        return { ...manifest, url: null, downloads: localAddonStore.get(manifest.id) ?? [] }
-      }),
-    )
-    setSources(sources)
+  const init = async () => {
+    try {
+      // Hard 10s limit on the token refresh — if the backend is unreachable
+      // for that long we drop straight to the login screen instead of hanging.
+      const u = await withTimeout(api.auth.refresh(), 10_000)
+      if (!u) { setAppState('login'); return }
+      await loadUserData(u)
+    } catch {
+      // Network error, timeout, or unexpected throw → show login.
+      setAppState('login')
+    }
+  }
+
+  const loadUserData = async (u: User) => {
+    setUser(u)
+
+    // ── Step 1: Critical path — manifests + library (parallel, with fallback) ─
+    // Errors here are non-fatal: we still enter the app, just with no sources/library.
+    const [manifests, serverItems] = await Promise.all([
+      withTimeout(api.sources.list(), 8_000).catch(() => [] as import('./types').AddonManifest[]),
+      withTimeout(api.library.list(), 8_000).catch(() => [] as import('./types').LibraryItemServer[]),
+    ])
+
+    // ── Step 2: Build initial sources from localStorage (zero network, instant) ─
+    // File-based addons load immediately; URL-based ones start with empty downloads
+    // and are filled in the background below.
+    const initial: Source[] = manifests.map((m) => {
+      const addonUrl = localAddonUrlStore.get(m.id) ?? m.url ?? null
+      if (!addonUrl) {
+        return { ...m, url: null, downloads: localAddonStore.get(m.id) ?? [] }
+      }
+      return { ...m, url: addonUrl, downloads: [] }
+    })
+
+    setSources(initial)
     setLibrary(serverItems)
-    setAppState('app')
+    setAppState('app')   // ← app is visible immediately; addons load below
+
+    // ── Step 3: Lazily fetch URL-based addon content in background ──────────
+    // 5-second timeout per addon; failures are silent (keep empty downloads).
+    manifests.forEach(async (m) => {
+      const addonUrl = localAddonUrlStore.get(m.id) ?? m.url ?? null
+      if (!addonUrl) return
+      try {
+        const ctrl = new AbortController()
+        const tid  = setTimeout(() => ctrl.abort(), 5_000)
+        const res  = await fetch(addonUrl, { signal: ctrl.signal })
+        clearTimeout(tid)
+        if (!res.ok) return
+        const data = await res.json() as { downloads?: DownloadItem[] }
+        const downloads = Array.isArray(data.downloads) ? data.downloads : []
+        patchSource(m.id, { downloads })
+      } catch { /* timeout or network error — keep empty downloads */ }
+    })
+
+    // ── Non-critical background tasks ────────────────────────────────────────
     api.auth.getAvatar().then(setAvatarDataUrl).catch(() => {})
     api.notifications.unreadCount().then(setUnreadCount).catch(() => {})
     api.notifications.markReadByType('download_complete').catch(() => {})
     fetchNotifs()
   }
 
-  const handleLoginSuccess = async (user: User) => { await loadUserData(user) }
+  const handleLoginSuccess = async (u: User) => { await loadUserData(u) }
 
   const handleLogout = async () => {
     try { await api.auth.logout() } catch { /* offline */ }
